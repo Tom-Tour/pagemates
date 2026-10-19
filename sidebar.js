@@ -94,7 +94,7 @@ function confirmButton(label, sure, onConfirm) {
 
 function render() {
   if (!snap) return;
-  const { settings, ctx, people } = snap;
+  const { settings, ctx } = snap;
 
   // Salons affichés selon le réglage
   $("#tabs [data-tab=page]").hidden = settings.view === "site";
@@ -106,13 +106,15 @@ function render() {
 
   // En-tête
   const inRoom = ctx?.enabled && !ctx.incognito;
-  const status = inRoom ? ctx.status : "off";
+  const room = tab === "site" ? snap.site : snap.page;
+  const status = inRoom ? room?.status ?? "connecting" : "off";
   $("#dot").className = status;
   $("#site").textContent = ctx?.site ?? "Pagemates";
-  const here = people.filter((p) => p.here).length;
-  $("#count").textContent = inRoom ? `· ${t("hereCount", here)} · ${t("siteCount", people.length)}` : "";
+  const here = snap.page?.people.length ?? 0;
+  const onSite = snap.site?.people.length;
+  $("#count").textContent = inRoom ? `· ${t("hereCount", here)}` + (onSite == null ? "" : ` · ${t("siteCount", onSite)}`) : "";
   $("#n-page").textContent = inRoom ? here : "";
-  $("#n-site").textContent = inRoom ? people.length : "";
+  $("#n-site").textContent = inRoom && onSite != null ? onSite : "";
   $("#leave").hidden = !inRoom;
   const unread = snap.dms.reduce((n, d) => n + d.unread, 0);
   $("#unread").hidden = !unread;
@@ -136,25 +138,26 @@ function render() {
     $("#off-action").textContent = off.action ?? "";
     $("#off-action").onclick = off.run ?? null;
   } else {
-    renderRoom(status);
+    renderRoom(room, status);
   }
 
   if (!$("#settings").hidden) renderSettings();
 }
 
-function renderRoom(status) {
-  const { people, dms } = snap;
+function renderRoom(room, status) {
+  const { dms } = snap;
   const isDm = tab === "dm";
+  const people = room?.people ?? [];
 
+  renderInstances(isDm ? null : room);
   $("#people").hidden = isDm;
   $("#dm-list").hidden = !isDm;
   $("#status").hidden = isDm || status === "open";
   $("#status").textContent = status === "error" ? t("connError") : t("connecting");
 
   if (!isDm) {
-    const list = tab === "page" ? people.filter((p) => p.here) : people;
     $("#people").replaceChildren(
-      ...(list.length ? list.map(personChip) : [el("span", { className: "muted", textContent: t(tab === "page" ? "nobodyPage" : "nobodySite") })])
+      ...(people.length ? people.map(personChip) : [el("span", { className: "muted", textContent: t(tab === "page" ? "nobodyPage" : "nobodySite") })])
     );
   } else {
     if (dmWith && !dms.some((d) => d.id === dmWith)) dmWith = null;
@@ -182,7 +185,7 @@ function renderRoom(status) {
 
   // Messages
   const thread = isDm ? dms.find((d) => d.id === dmWith) : null;
-  const msgs = isDm ? thread?.msgs ?? [] : tab === "page" ? snap.pageChat : snap.siteChat;
+  const msgs = isDm ? thread?.msgs ?? [] : room?.chat ?? [];
   const key = `${tab}|${dmWith}|${msgs.length}|${msgs.at(-1)?.id}|${LANG}`;
   if (key !== lastChat) {
     lastChat = key;
@@ -205,6 +208,27 @@ function renderRoom(status) {
         : t("dmOffline", thread.name)
       : ""
     : t(tab === "page" ? "chatPagePlaceholder" : "chatSitePlaceholder");
+}
+
+// Instances du salon : la nôtre, les autres (clic pour y passer), et « + » pour en ouvrir une
+function renderInstances(room) {
+  const bar = $("#instances");
+  bar.hidden = !room?.inst;
+  if (bar.hidden) return;
+  const chips = room.instances.map(({ n, count }) => {
+    const b = el("button", { className: "small" + (n === room.inst ? " on" : ""), textContent: `#${n} · ${count}/${snap.instanceSize}` });
+    b.title = n === room.inst ? t("instanceCurrent") : t("instanceJoin", n);
+    if (n !== room.inst) b.addEventListener("click", () => switchInstance(n));
+    return b;
+  });
+  const add = el("button", { className: "small", textContent: "+", title: t("instanceNew") });
+  add.addEventListener("click", () => switchInstance("new"));
+  bar.replaceChildren(el("span", { className: "muted", textContent: t("instance") }), ...chips, add);
+}
+
+async function switchInstance(n) {
+  const error = await ask("setInstance", windowId, tab, n);
+  showError(error ? t(error) : null);
 }
 
 function swatch(color) {

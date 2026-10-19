@@ -14,7 +14,8 @@ Une extension Firefox qui transforme chaque page web en salon : discute avec les
 - **Curseurs en direct** dans la couleur de ton choix, accrochés aux éléments de la page plutôt qu'aux pixels : un curseur se pose sur le même bouton ou le même paragraphe malgré une taille d'écran, un zoom ou une mise en page différents. Si l'élément n'existe pas chez toi (contenu personnalisé), le curseur s'affiche estompé à une position approximative ; s'il est hors de l'écran, une flèche sur le bord indique où il est
 - **Clics** : un cercle et un contour colorés sur l'élément cliqué par quelqu'un (affichage seulement, rien n'est cliqué à ta place)
 - **Surlignages** : le texte sélectionné par les autres est surligné dans leur couleur, retrouvé par citation (le texte et les mots autour), ce qui résiste aux différences de mise en page
-- **Messages privés** à toute personne avec qui tu partages un site
+- **Instances**, comme dans les jeux en ligne : un salon accueille jusqu'à 20 personnes ; au-delà, les nouveaux arrivants ouvrent l'instance #2, #3… Tu peux changer d'instance à la main, ou en ouvrir une vide pour te retrouver entre amis
+- **Messages privés** à toute personne avec qui tu partages un salon
 - **Anti-flood** : limite le nombre de messages que tu envoies par seconde, et ceux que tu acceptes par seconde de chaque personne ; quelqu'un qui insiste est mis en sourdine une minute
 - **Bloquer** quelqu'un pour de bon (les identités sont des clés signées : personne ne peut se faire passer pour quelqu'un d'autre)
 - **Se déconnecter** de tout en un clic, ou quitter un seul site
@@ -25,6 +26,7 @@ Une extension Firefox qui transforme chaque page web en salon : discute avec les
 - **Désactivé par défaut** : chaque site se rejoint à la demande (barre latérale → Rejoindre), sauf si tu actives « Rejoindre automatiquement tous les sites ». Jamais en navigation privée, jamais automatiquement sur les adresses locales
 - Rien ne passe par un serveur à nous. Les gens se trouvent grâce à des relais Nostr publics, qui ne voient qu'une empreinte du site, jamais l'adresse. Tout le reste (chat, curseurs, messages privés) passe directement entre navigateurs (WebRTC, chiffré)
 - Les personnes d'un salon savent que tu es sur ce site, et sur quelle page quand vous êtes sur la même
+- Comme pour toute connexion pair-à-pair, les personnes auxquelles tu es connecté peuvent voir ton adresse IP
 - Les positions de curseur ne contiennent jamais le texte de la page. Les surlignages envoient le texte sélectionné (désactivable). Les champs de formulaire ne sont jamais lus
 - Pas d'historique : les messages restent en mémoire et disparaissent quand tu pars
 
@@ -39,9 +41,8 @@ Les réglages de la barre latérale (⚙) se terminent par une section **À prop
 ## Fonctionnement
 
 - `content.js` tourne dans chaque page : envoie ton curseur, tes clics et ta sélection, et dessine ceux des autres dans un calque en Shadow DOM fermé
-- `rooms.js` : un réseau pair-à-pair par site (PeerJS), présence sur Nostr, poignée de main signée, chat, messages privés, limites de débit
+- `rooms.js` : un réseau pair-à-pair par salon et par instance (PeerJS, une seule connexion à son serveur par site), présence sur Nostr (qui dit aussi qui est dans quelle instance), poignée de main signée, chat, messages privés, limites de débit
 - `background.js` : réglages, onglets, lien avec la barre latérale
-- 24 connexions au plus par site : sur un site très fréquenté, tu ne vois qu'une partie des gens
 
 ## Soutenir
 

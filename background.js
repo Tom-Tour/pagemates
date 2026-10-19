@@ -1,5 +1,5 @@
 // Moteur de l'extension : réglages, suivi des onglets, lien avec la barre latérale.
-// Les salons eux-mêmes (réseau, chat, MP) sont dans rooms.js, chargé avant ce fichier.
+// Les salons eux-mêmes (réseau, instances, chat, MP) sont dans rooms.js, chargé avant ce fichier.
 // Rien ici ne doit appeler rooms.js avant la fin du chargement : tout passe par init().
 
 const PALETTE = ["#e5484d", "#f76b15", "#ffb224", "#46a758", "#12a594", "#0090ff", "#3e63dd", "#8e4ec6", "#d6409f", "#978365"];
@@ -71,48 +71,57 @@ function siteEnabled(site) {
   return settings.autoJoin && !PRIVATE_HOST.test(site);
 }
 
-function tabsOnSite(siteKey) {
-  return [...tabs.values()].filter((tab) => tab.siteKey === siteKey);
-}
-
 function tabsOnPage(pageKey) {
-  return [...tabs.values()].filter((tab) => tab.pageKey === pageKey && sessions.has(tab.siteKey));
-}
-
-function pagesOnSite(siteKey) {
-  return [...new Set(tabsOnSite(siteKey).map((tab) => tab.pageKey))].sort();
+  return [...tabs.values()].filter((tab) => tab.pageKey === pageKey && rooms.has(pageKey));
 }
 
 // --- Salons voulus ↔ salons ouverts --------------------------------------------------
 
 const GRACE = 8000; // un rechargement de page ne doit pas faire quitter le salon
-const closing = new Map(); // siteKey → timer
+const closing = new Map(); // roomKey → timer
+// Page quittée pour une autre (lien suivi, navigation dans le site) : pas de délai de
+// grâce, sinon on resterait affiché « sur la page » chez les autres
+const leftPages = new Set();
+const lastPageOfTab = new Map(); // tabId → pageKey, gardé après la fermeture du port
 
-function reconcile() {
+// Salons que les onglets ouverts demandent : roomKey → { kind, siteKey, site }
+function wantedRooms() {
   const wanted = new Map();
   for (const tab of tabs.values()) {
-    if (tab.siteKey && !tab.incognito && siteEnabled(tab.site)) wanted.set(tab.siteKey, tab.site);
+    if (!tab.siteKey || tab.incognito || !siteEnabled(tab.site)) continue;
+    wanted.set(tab.pageKey, { kind: "page", siteKey: tab.siteKey, site: tab.site });
+    if (settings.view !== "page") wanted.set(tab.siteKey, { kind: "site", siteKey: tab.siteKey, site: tab.site });
   }
-  for (const [key, site] of wanted) {
+  return wanted;
+}
+
+function reconcile() {
+  const wanted = wantedRooms();
+  for (const [key, { kind, siteKey, site }] of wanted) {
     clearTimeout(closing.get(key));
     closing.delete(key);
-    if (!sessions.has(key)) startSession(key, site);
+    if (!rooms.has(key)) startRoom(key, kind, siteKey, site);
   }
-  for (const key of sessions.keys()) {
-    if (wanted.has(key) || closing.has(key)) continue;
-    // Site désactivé à la main : on part tout de suite ; onglets fermés : on attend un peu
-    const immediate = !settings.connected || !siteEnabled(sessions.get(key).site);
-    if (immediate) endSession(key);
-    else
+  for (const [key, room] of rooms) {
+    if (wanted.has(key)) continue;
+    // Site désactivé à la main ou page quittée : on part tout de suite ; onglets fermés
+    // (ou rechargés) : on attend un peu
+    const immediate =
+      !settings.connected || !siteEnabled(room.site) || (room.kind === "site" && settings.view === "page") || leftPages.has(key);
+    if (immediate) {
+      clearTimeout(closing.get(key));
+      closing.delete(key);
+      endRoom(key);
+    } else if (!closing.has(key))
       closing.set(
         key,
         setTimeout(() => {
           closing.delete(key);
-          if (![...tabs.values()].some((tab) => tab.siteKey === key && siteEnabled(tab.site))) endSession(key);
+          if (!wantedRooms().has(key)) endRoom(key);
         }, GRACE)
       );
   }
-  for (const key of sessions.keys()) broadcastPages(key);
+  leftPages.clear();
   for (const tab of tabs.values()) pushPeers(tab);
   update();
 }
@@ -146,8 +155,11 @@ function connectPage(port) {
       const n = normalize(msg.url);
       const keys = n ? await Promise.all([sha("site:" + n.site), sha("page:" + n.page)]) : ["", ""];
       if (tab.url !== msg.url) return; // l'adresse a encore changé entre-temps
+      const previous = lastPageOfTab.get(tab.id);
+      if (previous && previous !== keys[1]) leftPages.add(previous);
       Object.assign(tab, { site: n?.site ?? "", siteKey: keys[0], pageKey: keys[1], lastPeers: "" });
       tabs.set(tab.id, tab);
+      lastPageOfTab.set(tab.id, tab.pageKey);
       reconcile();
     } else if (msg.t === "cur" || msg.t === "click" || msg.t === "sel") {
       if (tabs.get(tab.id) === tab) relayLive(tab, msg);
@@ -162,8 +174,8 @@ function connectPage(port) {
 
 // Personnes présentes sur la page de cet onglet → script de la page et badge du bouton
 function pushPeers(tab) {
-  const s = sessions.get(tab.siteKey);
-  const list = s ? peopleOnPage(s, tab.pageKey).map(({ id, name, color }) => ({ id, name, color })) : [];
+  const room = rooms.get(tab.pageKey);
+  const list = room ? [...room.members.values()].map(({ id, name, color }) => ({ id, name, color })) : [];
   const json = JSON.stringify(list);
   if (json === tab.lastPeers) return;
   tab.lastPeers = json;
@@ -182,28 +194,35 @@ function update() {
   }, 50);
 }
 
+function roomInfo(room, here = null) {
+  if (!room) return null;
+  const now = Date.now();
+  return {
+    status: roomStatus(room),
+    inst: room.inst,
+    instances: [...instanceCounts(room)].sort(([a], [b]) => a - b).map(([n, count]) => ({ n, count })),
+    people: [...room.members.values()].map((m) => ({
+      id: m.id,
+      name: m.name,
+      color: m.color,
+      here: here ? here.members.has(m.id) : true,
+      muted: m.mutedUntil > now,
+    })),
+    chat: room.chat,
+  };
+}
+
 function snapshot(windowId) {
   const tab = tabs.get(activeTab.get(windowId));
-  const s = tab && sessions.get(tab.siteKey);
-  const now = Date.now();
+  const pageRoom = tab && rooms.get(tab.pageKey);
   return {
     settings,
     palette: PALETTE,
     me: identity.pubkey,
-    ctx: tab?.site
-      ? { site: tab.site, enabled: siteEnabled(tab.site), incognito: tab.incognito, status: s?.status ?? "off" }
-      : null,
-    people: s
-      ? [...s.members.values()].map((m) => ({
-          id: m.id,
-          name: m.name,
-          color: m.color,
-          here: m.pages.has(tab.pageKey),
-          muted: m.mutedUntil > now,
-        }))
-      : [],
-    siteChat: s?.chat ?? [],
-    pageChat: s?.pageChats.get(tab.pageKey) ?? [],
+    instanceSize: INSTANCE_SIZE,
+    ctx: tab?.site ? { site: tab.site, enabled: siteEnabled(tab.site), incognito: tab.incognito } : null,
+    page: roomInfo(pageRoom),
+    site: roomInfo(tab && rooms.get(tab.siteKey), pageRoom ?? { members: new Map() }),
     dms: [...dms].map(([id, th]) => ({
       id,
       name: knownPeople.get(id)?.name ?? "?",
@@ -212,7 +231,6 @@ function snapshot(windowId) {
       unread: th.unread,
       msgs: th.msgs,
     })),
-    sites: sessions.size,
     log: logLines,
   };
 }
@@ -261,8 +279,14 @@ const commands = {
     saveSettings();
     reconcile();
   },
-  chat(windowId, scope, text) {
-    return sendChat(tabs.get(activeTab.get(windowId)), scope, text);
+  chat(windowId, kind, text) {
+    return sendChat(tabs.get(activeTab.get(windowId)), kind, text);
+  },
+  // Passer dans une autre instance du salon de page ou de site (n, ou "new")
+  setInstance(windowId, kind, n) {
+    const tab = tabs.get(activeTab.get(windowId));
+    const room = rooms.get(kind === "page" ? tab?.pageKey : tab?.siteKey);
+    return room ? switchInstance(room, n) : "errNotConnected";
   },
   dm(id, text) {
     return sendDm(id, text);
@@ -325,6 +349,7 @@ browser.tabs.onAttached.addListener((tabId, { newWindowId }) => {
   const tab = tabs.get(tabId);
   if (tab) tab.windowId = newWindowId;
 });
+browser.tabs.onRemoved.addListener((tabId) => lastPageOfTab.delete(tabId)); // plus de navigation à suivre
 browser.windows.onRemoved.addListener((windowId) => activeTab.delete(windowId));
 
 browser.browserAction.onClicked.addListener(() => browser.sidebarAction.toggle());

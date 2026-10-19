@@ -54,6 +54,7 @@ header { display: flex; align-items: center; gap: 6px; padding: 8px; border-bott
 .person .swatch { width: 8px; height: 8px; border-radius: 50%; }
 .person button { border: 0; background: none; padding: 0 2px; }
 .person .tag { font-size: 11px; }
+#instances { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px 8px 0; }
 #status, #error { margin: 0; padding: 4px 8px; }
 #error { color: var(--bad); }
 
