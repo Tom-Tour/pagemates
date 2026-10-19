@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Pagemates</title>
+  <link rel="stylesheet" href="sidebar.css">
+</head>
+<body>
+  <!-- Salon de l'onglet actif -->
+  <section id="main">
+    <header>
+      <span id="dot"></span>
+      <strong id="site"></strong>
+      <span id="count" class="muted"></span>
+      <span class="grow"></span>
+      <button id="leave" class="small" data-i18n="leaveSite" hidden></button>
+      <button id="open-settings" data-i18n-title="settings">⚙</button>
+    </header>
+
+    <nav id="tabs">
+      <button data-tab="page"><span data-i18n="tabPage"></span> <span class="n" id="n-page"></span></button>
+      <button data-tab="site"><span data-i18n="tabSite"></span> <span class="n" id="n-site"></span></button>
+      <button data-tab="dm"><span data-i18n="tabDm"></span> <span class="badge" id="unread" hidden></span></button>
+    </nav>
+
+    <div id="off" hidden>
+      <p id="off-title"></p>
+      <p id="off-help" class="muted"></p>
+      <button id="off-action" class="primary" hidden></button>
+    </div>
+
+    <div id="room">
+      <div id="people"></div>
+      <div id="dm-list" hidden></div>
+      <p id="status" class="muted" hidden></p>
+      <ol id="chat"></ol>
+      <p id="error" hidden></p>
+      <form id="send">
+        <input id="text" type="text" maxlength="500" autocomplete="off">
+        <button data-i18n="send"></button>
+      </form>
+    </div>
+  </section>
+
+  <!-- Réglages -->
+  <section id="settings" hidden>
+    <header>
+      <button id="close-settings" data-i18n="back"></button>
+    </header>
+
+    <h3 data-i18n="profile"></h3>
+    <label class="field"><span data-i18n="nameLabel"></span>
+      <input id="set-name" type="text" maxlength="24">
+    </label>
+    <div class="field"><span data-i18n="colorLabel"></span>
+      <div id="swatches"><input id="set-color" type="color"></div>
+    </div>
+
+    <h3 data-i18n="display"></h3>
+    <label class="field"><span data-i18n="viewLabel"></span>
+      <select id="set-view">
+        <option value="both" data-i18n="viewBoth"></option>
+        <option value="page" data-i18n="viewPage"></option>
+        <option value="site" data-i18n="viewSite"></option>
+      </select>
+    </label>
+    <label class="check"><input id="set-showCursors" type="checkbox"> <span data-i18n="showCursors"></span></label>
+    <label class="check"><input id="set-shareCursor" type="checkbox"> <span data-i18n="shareCursor"></span></label>
+    <label class="check"><input id="set-shareSelection" type="checkbox"> <span data-i18n="shareSelection"></span></label>
+
+    <h3 data-i18n="connection"></h3>
+    <label class="check"><input id="set-autoJoin" type="checkbox"> <span data-i18n="autoJoin"></span></label>
+    <p class="muted help" data-i18n="autoJoinHelp"></p>
+    <button id="toggle-connected"></button>
+    <div class="field"><span data-i18n="sitesLabel"></span>
+      <ul id="sites" class="list"></ul>
+    </div>
+
+    <h3 data-i18n="antiFlood"></h3>
+    <label class="field row"><span data-i18n="sendRate"></span>
+      <input id="set-sendRate" type="number" min="1" max="20">
+    </label>
+    <label class="field row"><span data-i18n="recvRate"></span>
+      <input id="set-recvRate" type="number" min="1" max="20">
+    </label>
+    <p class="muted help" data-i18n="floodHelp"></p>
+
+    <h3 data-i18n="blockedLabel"></h3>
+    <ul id="blocked" class="list"></ul>
+
+    <h3 data-i18n="language"></h3>
+    <select id="set-lang">
+      <option value="auto" data-i18n="langAuto"></option>
+      <option value="fr">Français</option>
+      <option value="en">English</option>
+    </select>
+
+    <details>
+      <summary data-i18n="log"></summary>
+      <pre id="log"></pre>
+    </details>
+    <h3 data-i18n="about"></h3>
+    <p>Pagemates <span id="version"></span></p>
+    <p><a href="https://github.com/Tom-Tour/pagemates" target="_blank" rel="noopener" data-i18n="sourceCode"></a></p>
+    <p><a href="https://ko-fi.com/tom_t" target="_blank" rel="noopener" data-i18n="support"></a></p>
+  </section>
+
+  <script src="i18n.js"></script>
+  <script src="sidebar.js"></script>
+</body>
+</html>

@@ -1,0 +1,34 @@
+{
+  "manifest_version": 2,
+  "name": "Pagemates",
+  "version": "0.1.0",
+  "description": "Every web page is a room: chat with people on the same page or site, see their cursors, clicks and highlights.",
+  "browser_specific_settings": {
+    "gecko": { "id": "pagemates@tom-tour", "strict_min_version": "128.0" }
+  },
+  "icons": { "48": "icons/icon.svg", "96": "icons/icon.svg" },
+  "permissions": ["storage", "tabs", "<all_urls>"],
+  "background": { "scripts": ["vendor/peerjs.min.js", "vendor/nostr.bundle.js", "i18n.js", "rooms.js", "background.js"] },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "browser_action": {
+    "default_title": "Pagemates",
+    "default_icon": "icons/icon.svg"
+  },
+  "sidebar_action": {
+    "default_title": "Pagemates",
+    "default_panel": "sidebar.html",
+    "default_icon": "icons/icon.svg",
+    "open_at_install": true
+  },
+  "commands": {
+    "_execute_sidebar_action": {
+      "suggested_key": { "default": "Alt+Shift+P" }
+    }
+  }
+}

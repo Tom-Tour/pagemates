@@ -1,0 +1,89 @@
+:root {
+  --bg: #f9f9fb; --fg: #15141a; --muted: #5b5b66; --card: #fff;
+  --border: #d7d7db; --accent: #0061e0; --active: #e0ecff;
+  --bad: #d70022;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1b22; --fg: #fbfbfe; --muted: #a3a3ad; --card: #2b2a33;
+    --border: #45444c; --accent: #00ddff; --active: #1f3a4d;
+    --bad: #ff848b;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 13px system-ui, sans-serif; }
+button, input[type=text], input[type=number], select {
+  font: inherit; color: var(--fg); background: var(--card);
+  border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px;
+}
+button { cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.on { background: var(--active); border-color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+button.danger { color: var(--bad); border-color: var(--bad); }
+button.small { padding: 1px 6px; font-size: 12px; }
+.muted { color: var(--muted); }
+.grow { flex: 1; }
+
+/* --- Salon --- */
+#main { display: flex; flex-direction: column; height: 100%; }
+header { display: flex; align-items: center; gap: 6px; padding: 8px; border-bottom: 1px solid var(--border); }
+#site { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#count { white-space: nowrap; }
+#dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+#dot.open { background: #46a758; }
+#dot.connecting { background: #ffb224; }
+#dot.error { background: var(--bad); }
+
+#tabs { display: flex; gap: 4px; padding: 6px 8px 0; }
+#tabs button { flex: 1; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.n { color: var(--muted); }
+.badge { background: var(--bad); color: #fff; border-radius: 8px; padding: 0 5px; font-size: 11px; }
+
+#off { padding: 16px 12px; }
+#off p { margin: 0 0 8px; }
+#off-title { font-weight: 600; }
+
+#room { flex: 1; display: flex; flex-direction: column; min-height: 0; border-top: 1px solid var(--border); }
+#people, #dm-list { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--border); max-height: 30%; overflow-y: auto; }
+.person { display: inline-flex; align-items: center; gap: 4px; padding: 1px 4px 1px 6px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); }
+.person.selected { border-color: var(--accent); background: var(--active); }
+.person.away { opacity: .6; }
+.person .swatch { width: 8px; height: 8px; border-radius: 50%; }
+.person button { border: 0; background: none; padding: 0 2px; }
+.person .tag { font-size: 11px; }
+#status, #error { margin: 0; padding: 4px 8px; }
+#error { color: var(--bad); }
+
+#chat { flex: 1; overflow-y: auto; margin: 0; padding: 6px 8px; list-style: none; }
+#chat li { margin: 2px 0; overflow-wrap: anywhere; }
+#chat li.system { color: var(--muted); font-style: italic; font-size: 12px; }
+#chat .who { font-weight: 600; cursor: pointer; }
+#chat .who.me { cursor: default; }
+#chat time { color: var(--muted); font-size: 11px; margin-right: 4px; }
+#chat .empty { color: var(--muted); }
+
+#send { display: flex; gap: 4px; padding: 8px; border-top: 1px solid var(--border); }
+#send input { flex: 1; min-width: 0; }
+
+/* --- Réglages --- */
+#settings { padding: 0 8px 8px; }
+#settings header { padding: 8px 0; margin-bottom: 4px; }
+#settings h3 { margin: 14px 0 6px; font-size: 13px; }
+.field { display: flex; flex-direction: column; gap: 3px; margin: 6px 0; }
+.field.row { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; }
+.field.row input { width: 60px; }
+.check { display: flex; gap: 6px; align-items: flex-start; margin: 4px 0; }
+.help { margin: 2px 0 6px; font-size: 12px; }
+#swatches { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+#swatches button { width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 2px solid transparent; }
+#swatches button.on { border-color: var(--fg); }
+#set-color { width: 30px; height: 24px; padding: 0; border: 1px solid var(--border); background: none; }
+.list { list-style: none; margin: 0; padding: 0; }
+.list li { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+.list li span:first-child { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+#settings a { color: var(--accent); }
+#settings p { margin: 4px 0; }
+#log { white-space: pre-wrap; font-size: 11px; max-height: 200px; overflow-y: auto; }
