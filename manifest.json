@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Pagemates",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Every web page is a room: chat with people on the same page or site, see their cursors, clicks and highlights.",
   "browser_specific_settings": {
     "gecko": {
@@ -34,7 +34,10 @@
     "scripts": [
       "vendor/peerjs.min.js",
       "vendor/nostr.bundle.js",
+      "common/i18n-core.js",
       "i18n.js",
+      "common/net.js",
+      "common/pow.js",
       "rooms.js",
       "background.js"
     ]

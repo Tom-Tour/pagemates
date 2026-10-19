@@ -12,6 +12,7 @@ const DEFAULTS = {
   showCursors: true,
   shareCursor: true,
   shareSelection: true,
+  chatSound: false, // petit son à chaque nouveau message (salons et messages privés)
   connected: true, // interrupteur général
   autoJoin: false, // rejoindre tous les sites sans demander
   sites: {}, // site → true (toujours rejoindre) | false (jamais)
@@ -369,8 +370,8 @@ function snapshot(windowId) {
     me: identity.pubkey,
     myCode: identity.code,
     instanceSize: INSTANCE_SIZE,
-    sendRate: SEND_PER_SECOND,
-    mining: mining && { tries: mining.tries, expected: 2 ** POW_BITS },
+    sendRate: LIMITS.SEND_PER_SECOND,
+    mining: mining && { tries: mining.tries, expected: 2 ** POW.BITS },
     ctx: tab?.site
       ? {
           site: tab.site,
@@ -570,21 +571,19 @@ browser.runtime.onInstalled.addListener(async () => {
 // Preuve de travail de notre identité : une seule fois, puis gardée avec la clé
 function mineIdentity() {
   mining = { tries: 0 };
-  const worker = new Worker("pow-worker.js");
-  worker.onmessage = ({ data }) => {
-    if (data.t === "progress") {
-      mining.tries = data.tries;
-      return update();
-    }
-    worker.terminate();
-    mining = null;
-    identity.pow = data.nonce;
-    identity.code = data.code;
-    browser.storage.local.set({ pow: { v: POW_VERSION, pubkey: identity.pubkey, nonce: data.nonce, code: data.code } });
-    log(t("logPowDone"));
-    reconcile();
-  };
-  worker.postMessage({ t: "mine", pubkey: identity.pubkey, bits: POW_BITS });
+  pow
+    .mine(identity.pubkey, POW.BITS, (tries) => {
+      mining.tries = tries;
+      update();
+    })
+    .then(({ nonce, code }) => {
+      mining = null;
+      identity.pow = nonce;
+      identity.code = code;
+      browser.storage.local.set({ pow: { v: POW.VERSION, pubkey: identity.pubkey, nonce, code } });
+      log(t("logPowDone"));
+      reconcile();
+    });
   update();
 }
 
@@ -603,11 +602,11 @@ async function init() {
   let secret = typeof stored.identity === "string" && /^[0-9a-f]{64}$/.test(stored.identity) ? stored.identity : null;
   if (!secret) secret = hex(NostrTools.generateSecretKey());
   identity = { secret: unhex(secret), pubkey: NostrTools.getPublicKey(unhex(secret)), pow: null };
-  const pow = stored.pow;
-  if (pow?.v === POW_VERSION && pow.pubkey === identity.pubkey && Number.isSafeInteger(pow.nonce)) identity.pow = pow.nonce;
+  const saved = stored.pow;
+  if (saved?.v === POW.VERSION && saved.pubkey === identity.pubkey && Number.isSafeInteger(saved.nonce)) identity.pow = saved.nonce;
   await browser.storage.local.set({ settings, identity: secret });
   if (identity.pow == null) mineIdentity();
-  else identity.code = pow.code;
+  else identity.code = saved.code;
   for (const tab of await browser.tabs.query({ active: true })) activeTab.set(tab.windowId, tab.id);
 }
 

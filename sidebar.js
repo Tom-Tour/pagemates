@@ -32,6 +32,7 @@ port.onMessage.addListener((msg) => {
     return;
   }
   snap = msg.snap;
+  heard();
   if (setLang(snap.settings.lang) || !translated) {
     translated = true;
     applyI18n();
@@ -39,6 +40,18 @@ port.onMessage.addListener((msg) => {
   }
   render();
 });
+
+// Son à chaque nouveau message des autres (réglage commun), dans les salons de l'onglet
+// actif et les messages privés. Le premier état reçu ne sonne pas.
+let lastHeard = null;
+function heard() {
+  let last = 0;
+  for (const list of [snap.page?.chat, snap.site?.chat, ...snap.dms.map((d) => d.msgs)]) {
+    for (const m of list ?? []) if (!m.system && m.from !== "me" && m.id > last) last = m.id;
+  }
+  if (lastHeard !== null && last > lastHeard && snap.settings.chatSound) beep();
+  lastHeard = Math.max(lastHeard ?? 0, last);
+}
 
 browser.windows.getCurrent().then((w) => {
   windowId = w.id;
@@ -96,7 +109,7 @@ function renderPerson() {
   close.addEventListener("click", closePerson);
   const head = el(
     "div",
-    { className: "person-head" },
+    { className: "head" },
     swatch(known.color),
     el("strong", { textContent: known.name }),
     codeTag(known.code),
@@ -117,14 +130,14 @@ function renderPerson() {
     });
     box.replaceChildren(
       head,
-      el("p", { className: "person-warn", textContent: t("blockConfirmTitle", known.name) }),
+      el("p", { className: "warn", textContent: t("blockConfirmTitle", known.name) }),
       el("p", { className: "muted", textContent: t("blockConfirmHelp") }),
-      el("div", { className: "person-actions" }, yes, no)
+      el("div", { className: "actions" }, yes, no)
     );
     return;
   }
   const inkHidden = !!snap.settings.hiddenInk[known.id];
-  const dm = el("button", { textContent: "✉ " + t("sendDm") });
+  const dm = el("button", { textContent: "✉ " + t("privateMessage") });
   dm.addEventListener("click", () => {
     person = null;
     openDm(known.id);
@@ -136,7 +149,7 @@ function renderPerson() {
     person.confirm = true;
     render();
   });
-  box.replaceChildren(head, el("div", { className: "person-actions" }, dm, inkBtn, block));
+  box.replaceChildren(head, el("div", { className: "actions" }, dm, inkBtn, block));
 }
 
 // --- Affichage ------------------------------------------------------------------------
@@ -150,7 +163,7 @@ function render() {
   $("#mining").hidden = !snap.mining;
   if (snap.mining) {
     const pct = Math.min(99, Math.round((snap.mining.tries / snap.mining.expected) * 100));
-    $("#mining-title").textContent = t("miningTitle", pct);
+    $("#mining-title").textContent = t("identityMining", pct);
     $("#mining-bar").value = pct;
   }
 
@@ -227,7 +240,7 @@ function renderRoom(room, status) {
         ? dms.map((d) => {
             const chip = el(
               "span",
-              { className: "person" + (d.id === dmWith ? " selected" : "") + (d.online ? "" : " away") },
+              { className: "chip" + (d.id === dmWith ? " selected" : "") + (d.online ? "" : " away") },
               swatch(d.color),
               el("span", { textContent: d.name }),
               codeTag(d.code),
@@ -334,7 +347,7 @@ function renderChannel(room) {
   box.hidden = !room?.inst;
   if (box.hidden) return;
   const count = room.instances.find((x) => x.n === room.inst)?.count ?? 1;
-  $("#channel-btn").textContent = `${t("instance")} #${room.inst} · ${count}/${snap.instanceSize} ▾`;
+  $("#channel-btn").textContent = `${t("channel")} #${room.inst} · ${count}/${snap.instanceSize} ▾`;
   $("#channel-menu").hidden = !channelOpen;
   $("#channel-list").replaceChildren(
     ...room.instances.map(({ n, count }) => {
@@ -372,8 +385,9 @@ $("#channel-go").addEventListener("submit", (e) => {
   switchInstance(n);
 });
 
-// Outils de dessin (onglet Page) : mode dessin, effacer nos dessins de la page
-let clearAsk = false;
+// Outils de dessin (onglet Page) : mode dessin, effacer nos dessins de la page (nos propres
+// données : confirmation légère « Sûr ? » du kit commun)
+const sure = createSure(() => render());
 
 function renderTools() {
   const box = $("#tools");
@@ -386,24 +400,11 @@ function renderTools() {
     showError(error ? t(error) : null);
   });
   const items = [drawBtn];
-  if (ctx.myInk && clearAsk) {
-    const yes = el("button", { className: "small danger", textContent: t("yes") });
-    yes.addEventListener("click", () => {
-      clearAsk = false;
-      act("clearInk", windowId);
-    });
-    const no = el("button", { className: "small", textContent: t("no") });
-    no.addEventListener("click", () => {
-      clearAsk = false;
-      render();
-    });
-    items.push(el("span", { className: "muted", textContent: t("clearInkSure", ctx.myInk) }), yes, no);
-  } else if (ctx.myInk) {
-    const clear = el("button", { className: "small", textContent: t("clearInk", ctx.myInk) });
-    clear.addEventListener("click", () => {
-      clearAsk = true;
-      render();
-    });
+  if (ctx.myInk) {
+    const armed = sure.armed("clearInk");
+    const clear = el("button", { className: "small" + (armed ? " danger" : ""), textContent: armed ? t("sure") : t("clearInk", ctx.myInk) });
+    clear.title = t("clearInkSure", ctx.myInk);
+    clear.addEventListener("click", () => sure.click("clearInk", () => act("clearInk", windowId)));
     items.push(clear);
   }
   box.replaceChildren(...items);
@@ -438,7 +439,7 @@ function codeTag(code) {
 function personChip(p) {
   const chip = el(
     "button",
-    { className: "person" + (person?.id === p.id ? " selected" : ""), title: t("personMenu") },
+    { className: "chip" + (person?.id === p.id ? " selected" : ""), title: t("personMenu") },
     swatch(p.color),
     el("span", { textContent: p.name }),
     codeTag(p.code)
@@ -452,7 +453,7 @@ function personChip(p) {
 
 function chatLine(m) {
   const time = el("time", { textContent: new Date(m.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) });
-  if (m.system) return el("li", { className: "system" }, time, t(m.key, ...(m.args ?? [])));
+  if (m.system) return el("li", { className: "msg system" }, time, t(m.key, ...(m.args ?? [])));
   const me = m.from === "me";
   const who = el("span", { className: "who" + (me ? " me" : ""), textContent: me ? t("you") : m.name });
   who.style.color = m.color;
@@ -461,7 +462,7 @@ function chatLine(m) {
     who.title = (code ? code + " · " : "") + t("personMenu");
     who.addEventListener("click", () => openPerson(m.from));
   }
-  return el("li", {}, time, who, " ", m.text);
+  return el("li", { className: "msg" }, time, who, " ", m.text);
 }
 
 // --- Envoi --------------------------------------------------------------------------
@@ -503,7 +504,7 @@ $("#set-name").addEventListener("change", (e) => set({ name: e.target.value }));
 $("#set-color").addEventListener("change", (e) => set({ color: e.target.value }));
 $("#set-view").addEventListener("change", (e) => set({ view: e.target.value }));
 $("#set-lang").addEventListener("change", (e) => set({ lang: e.target.value }));
-for (const k of ["showCursors", "shareCursor", "shareSelection", "autoJoin"]) {
+for (const k of ["showCursors", "shareCursor", "shareSelection", "autoJoin", "chatSound"]) {
   $(`#set-${k}`).addEventListener("change", (e) => set({ [k]: e.target.checked }));
 }
 $("#toggle-connected").addEventListener("click", () => set({ connected: !snap.settings.connected }));
@@ -521,7 +522,7 @@ function renderSettings(force = false) {
   fill("#set-color", "value", s.color, force);
   fill("#set-view", "value", s.view, force);
   fill("#set-lang", "value", s.lang, force);
-  for (const k of ["showCursors", "shareCursor", "shareSelection", "autoJoin"]) fill(`#set-${k}`, "checked", s[k], true);
+  for (const k of ["showCursors", "shareCursor", "shareSelection", "autoJoin", "chatSound"]) fill(`#set-${k}`, "checked", s[k], true);
 
   const swatches = snap.palette.map((c) => {
     const b = el("button", { className: c === s.color ? "on" : "", title: c });
@@ -552,7 +553,8 @@ function renderSettings(force = false) {
       ? blocked.map(([id, name]) => {
           const b = el("button", { className: "small", textContent: t("unblock") });
           b.addEventListener("click", () => act("unblock", id));
-          return el("li", {}, el("span", { textContent: `${name} · ${id.slice(0, 8)}` }), b);
+          // « Nom · CODE » depuis 0.6 ; avant, le nom seul : on ajoute le début de l'identité
+          return el("li", {}, el("span", { textContent: name.includes("·") ? name : `${name} · ${id.slice(0, 8)}` }), b);
         })
       : [el("li", { className: "muted", textContent: t("noBlocked") })])
   );

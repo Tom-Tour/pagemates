@@ -3,29 +3,30 @@
 <head>
   <meta charset="utf-8">
   <title>Pagemates</title>
+  <link rel="stylesheet" href="common/theme.css">
   <link rel="stylesheet" href="sidebar.css">
 </head>
 <body>
   <!-- Salon de l'onglet actif -->
   <section id="main">
-    <header>
+    <header class="line">
       <span id="dot"></span>
       <strong id="site"></strong>
       <span class="grow"></span>
       <button id="leave" class="small" data-i18n="leaveSite" hidden></button>
-      <button id="open-settings" data-i18n-title="settings">⚙</button>
+      <button id="open-settings" class="icon" data-i18n-title="settings">⚙</button>
     </header>
 
-    <div id="mining" hidden>
+    <div id="mining" class="notice" hidden>
       <p id="mining-title"></p>
       <progress id="mining-bar" max="100"></progress>
-      <p class="muted" data-i18n="miningHelp"></p>
+      <p class="help" data-i18n="identityMiningHelp"></p>
     </div>
 
-    <nav id="tabs">
-      <button data-tab="page"><span data-i18n="tabPage"></span> <span class="n" id="n-page"></span></button>
-      <button data-tab="site"><span data-i18n="tabSite"></span> <span class="n" id="n-site"></span></button>
-      <button data-tab="dm"><span data-i18n="tabDm"></span> <span class="badge" id="unread" hidden></span></button>
+    <nav id="tabs" class="tabs">
+      <button class="tab" data-tab="page"><span data-i18n="tabPage"></span> <span class="n" id="n-page"></span></button>
+      <button class="tab" data-tab="site"><span data-i18n="tabSite"></span> <span class="n" id="n-site"></span></button>
+      <button class="tab" data-tab="dm"><span data-i18n="privateMessage"></span> <span class="badge" id="unread" hidden></span></button>
     </nav>
 
     <div id="off" hidden>
@@ -49,79 +50,96 @@
         </div>
       </div>
       <div id="tools" hidden></div>
-      <div id="people"></div>
-      <div id="dm-list" hidden></div>
-      <div id="person" hidden></div>
+      <div id="people" class="chips"></div>
+      <div id="dm-list" class="chips" hidden></div>
+      <div id="person" class="card" hidden></div>
       <p id="status" class="muted" hidden></p>
-      <ol id="chat"></ol>
-      <p id="error" hidden></p>
-      <form id="send">
+      <ol id="chat" class="chat"></ol>
+      <p id="error" class="error" hidden></p>
+      <form id="send" class="chat-form">
         <input id="text" type="text" maxlength="500" autocomplete="off">
         <button data-i18n="send"></button>
       </form>
     </div>
   </section>
 
-  <!-- Réglages -->
-  <section id="settings" hidden>
-    <header>
+  <!-- Réglages : cadres dans l'ordre du guide commun (Général, propres à Pagemates, Profil,
+       personnes bloquées, Journal, À propos) -->
+  <section id="settings" class="settings" hidden>
+    <div class="line">
       <button id="close-settings" data-i18n="back"></button>
-    </header>
-
-    <h3 data-i18n="profile"></h3>
-    <label class="field"><span data-i18n="nameLabel"></span>
-      <input id="set-name" type="text" maxlength="24">
-    </label>
-    <p class="field row"><span data-i18n="codeLabel"></span> <span id="my-code" class="code"></span></p>
-    <p class="muted help" data-i18n="codeHelp"></p>
-    <div class="field"><span data-i18n="colorLabel"></span>
-      <div id="swatches"><input id="set-color" type="color"></div>
+      <strong data-i18n="settings"></strong>
     </div>
 
-    <h3 data-i18n="display"></h3>
-    <label class="field"><span data-i18n="viewLabel"></span>
-      <select id="set-view">
-        <option value="both" data-i18n="viewBoth"></option>
-        <option value="page" data-i18n="viewPage"></option>
-        <option value="site" data-i18n="viewSite"></option>
-      </select>
-    </label>
-    <label class="check"><input id="set-showCursors" type="checkbox"> <span data-i18n="showCursors"></span></label>
-    <label class="check"><input id="set-shareCursor" type="checkbox"> <span data-i18n="shareCursor"></span></label>
-    <label class="check"><input id="set-shareSelection" type="checkbox"> <span data-i18n="shareSelection"></span></label>
+    <fieldset>
+      <legend data-i18n="general"></legend>
+      <label><span data-i18n="language"></span>
+        <select id="set-lang">
+          <option value="auto" data-i18n="langAuto"></option>
+          <option value="fr">Français</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+      <label class="check"><input id="set-chatSound" type="checkbox"> <span data-i18n="chatSound"></span></label>
+    </fieldset>
 
-    <h3 data-i18n="connection"></h3>
-    <label class="check"><input id="set-autoJoin" type="checkbox"> <span data-i18n="autoJoin"></span></label>
-    <p class="muted help" data-i18n="autoJoinHelp"></p>
-    <button id="toggle-connected"></button>
-    <div class="field"><span data-i18n="sitesLabel"></span>
+    <fieldset>
+      <legend data-i18n="display"></legend>
+      <label><span data-i18n="viewLabel"></span>
+        <select id="set-view">
+          <option value="both" data-i18n="viewBoth"></option>
+          <option value="page" data-i18n="viewPage"></option>
+          <option value="site" data-i18n="viewSite"></option>
+        </select>
+      </label>
+      <label class="check"><input id="set-showCursors" type="checkbox"> <span data-i18n="showCursors"></span></label>
+      <label class="check"><input id="set-shareCursor" type="checkbox"> <span data-i18n="shareCursor"></span></label>
+      <label class="check"><input id="set-shareSelection" type="checkbox"> <span data-i18n="shareSelection"></span></label>
+    </fieldset>
+
+    <fieldset>
+      <legend data-i18n="connection"></legend>
+      <label class="check"><input id="set-autoJoin" type="checkbox"> <span data-i18n="autoJoin"></span></label>
+      <p class="help" data-i18n="autoJoinHelp"></p>
+      <button id="toggle-connected"></button>
+      <p data-i18n="sitesLabel"></p>
       <ul id="sites" class="list"></ul>
-    </div>
+    </fieldset>
 
-    <h3 data-i18n="antiFlood"></h3>
-    <p class="muted help" data-i18n="floodHelp"></p>
+    <fieldset>
+      <legend data-i18n="profile"></legend>
+      <label><span data-i18n="nickname"></span>
+        <input id="set-name" type="text" maxlength="24" autocomplete="off">
+      </label>
+      <p><span data-i18n="colorLabel"></span></p>
+      <div id="swatches"><input id="set-color" type="color"></div>
+      <p><span data-i18n="codeLabel"></span> : <span id="my-code" class="code"></span></p>
+      <p class="help" data-i18n="codeHelp"></p>
+      <p class="help" data-i18n="ipNotice"></p>
+    </fieldset>
 
-    <h3 data-i18n="blockedLabel"></h3>
-    <ul id="blocked" class="list"></ul>
-
-    <h3 data-i18n="language"></h3>
-    <select id="set-lang">
-      <option value="auto" data-i18n="langAuto"></option>
-      <option value="fr">Français</option>
-      <option value="en">English</option>
-    </select>
+    <fieldset>
+      <legend data-i18n="blockedList"></legend>
+      <ul id="blocked" class="list"></ul>
+      <p class="help" data-i18n="floodHelp"></p>
+    </fieldset>
 
     <details>
       <summary data-i18n="log"></summary>
-      <pre id="log"></pre>
+      <pre id="log" class="log"></pre>
     </details>
-    <h3 data-i18n="about"></h3>
-    <p>Pagemates <span id="version"></span></p>
-    <p><a href="https://github.com/Tom-Tour/pagemates" target="_blank" rel="noopener" data-i18n="sourceCode"></a></p>
-    <p><a href="https://ko-fi.com/tom_t" target="_blank" rel="noopener" data-i18n="support"></a></p>
+
+    <fieldset>
+      <legend data-i18n="about"></legend>
+      <p>Pagemates <span id="version"></span></p>
+      <p><a href="https://github.com/Tom-Tour/pagemates" target="_blank" rel="noopener" data-i18n="sourceCode"></a></p>
+      <p><a href="https://ko-fi.com/tom_t" target="_blank" rel="noopener" data-i18n="support"></a></p>
+    </fieldset>
   </section>
 
+  <script src="common/i18n-core.js"></script>
   <script src="i18n.js"></script>
+  <script src="common/ui.js"></script>
   <script src="sidebar.js"></script>
 </body>
 </html>

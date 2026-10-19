@@ -11,7 +11,7 @@ w.browser = {
   runtime: { connect: () => ({ postMessage: (m) => sent.push(m), onMessage: { addListener: (f) => listeners.push(f) } }), getManifest: () => ({ version: "x" }) },
   windows: { getCurrent: async () => ({ id: 1 }) },
 };
-w.eval(fs.readFileSync(D + "i18n.js", "utf8") + "\n" + fs.readFileSync(D + "sidebar.js", "utf8"));
+w.eval(["common/i18n-core.js", "i18n.js", "common/ui.js", "sidebar.js"].map((f) => fs.readFileSync(D + f, "utf8")).join(String.fromCharCode(10)));
 const room = (inst) => ({ status: "open", inst, instances: [{ n: 1, count: 20 }, { n: 2, count: 3 }], people: [{ id: "b", name: "Bob", color: "#0090ff", code: "7F3A", here: true, muted: false }], chat: [{ id: 1, at: Date.now(), from: "b", name: "Bob", color: "#0090ff", text: "salut" }] });
 const snap = { settings: { lang: "fr", view: "both", connected: true, name: "Moi", color: "#e5484d", sites: {}, blocked: {}, hiddenInk: {}, showCursors: true, shareCursor: true, shareSelection: true, autoJoin: false, }, palette: ["#e5484d"], me: "me", instanceSize: 20, sendRate: 2, ctx: { site: "youtube.com", enabled: true, incognito: false, drawMode: false, myInk: 2, parts: { segments: ["watch"], depth: null, custom: false, params: [{ name: "v", value: "ar-6Bdo3U4c", on: true }, { name: "list", value: "RDar-6Bdo3U4c", on: false }] } }, page: room(2), site: room(1), dms: [], log: [] };
 let fails = 0; const check = (n, c, x = "") => { console.log(`${c ? "PASS" : "FAIL"}  ${n}${c ? "" : "  " + x}`); if (!c) fails++; };
@@ -76,8 +76,10 @@ setTimeout(() => {
   btn("#tools", "Dessiner").click();
   check("draw button sends drawMode on", sent.some((m) => m.cmd === "drawMode" && m.args[1] === true));
   btn("#tools", "Effacer mes dessins").click();
-  check("clear asks first", q("#tools").textContent.includes("Effacer tes 2 dessins") && !sent.some((m) => m.cmd === "clearInk"));
-  btn("#tools", "Oui").click();
+  check("clear asks « Sûr ? » first", !!btn("#tools", "Sûr ?") && !sent.some((m) => m.cmd === "clearInk"));
+  listeners.forEach((f) => f({ t: "snap", snap: { ...snap, mining: null } }));
+  check("still armed after a refresh", !!btn("#tools", "Sûr ?"));
+  btn("#tools", "Sûr ?").click();
   check("then clears", sent.some((m) => m.cmd === "clearInk"));
   // DM tab: card through ⋯
   const dmSnap = { ...snap, mining: null, dms: [{ id: "c", name: "Carla", color: "#46a758", online: true, unread: 0, msgs: [] }] };
@@ -86,6 +88,16 @@ setTimeout(() => {
   check("tab label", q("#tabs [data-tab=dm]").textContent.includes("Message privé"));
   btn("#dm-list", "⋯").click();
   check("⋯ in DM list opens Carla's card", !q("#person").hidden && q("#person strong").textContent === "Carla");
+  // sound for new messages (common setting)
+  let beeps = 0;
+  w.beep = () => beeps++;
+  const withMsg = (sound, id) => ({ ...snap, mining: null, settings: { ...snap.settings, chatSound: sound }, page: { ...snap.page, chat: [...snap.page.chat, { id, at: Date.now(), from: "b", name: "Bob", color: "#0090ff", text: "hop" + id }] } });
+  listeners.forEach((f) => f({ t: "snap", snap: withMsg(false, 50) }));
+  check("no sound when the setting is off", beeps === 0);
+  listeners.forEach((f) => f({ t: "snap", snap: withMsg(true, 51) }));
+  check("sound for a new message when on", beeps === 1);
+  listeners.forEach((f) => f({ t: "snap", snap: withMsg(true, 51) }));
+  check("no sound for the same message again", beeps === 1);
   console.log(fails ? `\n${fails} FAILURE(S)` : "\nALL PASS");
   process.exit(fails ? 1 : 0);
 }, 50);

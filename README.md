@@ -55,8 +55,8 @@ The sidebar settings (⚙) end with an **About** section linking to this page an
 - `content.js` runs in every page: sends your cursor, clicks and selection, and draws other people's in a closed Shadow DOM layer
 - `rooms.js`: one peer-to-peer mesh per room and channel (PeerJS, one connection to its server per site), presence on Nostr (which also tells who is on which channel), signed handshake, chat, private messages, rate limits
 - `background.js`: settings, tabs, sidebar link
-- `pow-worker.js`: proof of work, computed off the main thread
-- Third-party: [PeerJS](https://peerjs.com), [nostr-tools](https://github.com/nbd-wtf/nostr-tools), [scrypt-js](https://github.com/ricmoo/scrypt-js) (MIT)
+- `common/`: base shared with the other Tom-Tour extensions (theme, vocabulary, room security, proof of work), so they look and behave alike
+- Third-party: [PeerJS](https://peerjs.com), [nostr-tools](https://github.com/nbd-wtf/nostr-tools), [scrypt-js](https://github.com/ricmoo/scrypt-js) (MIT, in `common/`)
 
 ## Tests
 

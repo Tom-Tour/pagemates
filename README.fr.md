@@ -55,8 +55,8 @@ Les réglages de la barre latérale (⚙) se terminent par une section **À prop
 - `content.js` tourne dans chaque page : envoie ton curseur, tes clics et ta sélection, et dessine ceux des autres dans un calque en Shadow DOM fermé
 - `rooms.js` : un réseau pair-à-pair par salon et par canal (PeerJS, une seule connexion à son serveur par site), présence sur Nostr (qui dit aussi qui est sur quel canal), poignée de main signée, chat, messages privés, limites de débit
 - `background.js` : réglages, onglets, lien avec la barre latérale
-- `pow-worker.js` : preuve de travail, calculée hors du fil principal
-- Librairies : [PeerJS](https://peerjs.com), [nostr-tools](https://github.com/nbd-wtf/nostr-tools), [scrypt-js](https://github.com/ricmoo/scrypt-js) (MIT)
+- `common/` : base commune aux autres extensions Tom-Tour (thème, vocabulaire, sécurité des salons, preuve de travail), pour qu'elles se ressemblent et se comportent pareil
+- Librairies : [PeerJS](https://peerjs.com), [nostr-tools](https://github.com/nbd-wtf/nostr-tools), [scrypt-js](https://github.com/ricmoo/scrypt-js) (MIT, dans `common/`)
 
 ## Tests
 

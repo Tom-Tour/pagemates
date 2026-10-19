@@ -42,7 +42,8 @@ class FakePeer extends EventEmitter {
 class FakeWorker {
   constructor(file) {
     const w = vm.createContext({ TextEncoder, Uint8Array, Uint32Array, Int32Array, Math, setTimeout, console });
-    w.importScripts = (f) => vm.runInContext(src(f), w);
+    const base = file.includes("/") ? file.slice(0, file.lastIndexOf("/") + 1) : "";
+    w.importScripts = (f) => vm.runInContext(src(base + f), w);
     w.postMessage = (data) => setTimeout(() => this.onmessage?.({ data: JSON.parse(JSON.stringify(data)) }));
     vm.runInContext("var self = this;", w);
     vm.runInContext(src(file), w);
@@ -98,7 +99,10 @@ function makeEngine(label, storedSettings) {
   ctx.Peer = class extends FakePeer { constructor() { super(); this.parse = parse; } };
   vm.runInContext(src("vendor/nostr.bundle.js"), ctx);
   ctx.NostrTools = { ...ctx.NostrTools, SimplePool: FakePool };
-  for (const f of ["i18n.js", "rooms.js", "background.js"]) vm.runInContext(src(f).replace("const INSTANCE_SIZE = 20", "const INSTANCE_SIZE = " + INSTANCE_SIZE).replace("const POW_BITS = 7", "const POW_BITS = 2"), ctx, { filename: f });
+  for (const f of ["common/i18n-core.js", "i18n.js", "common/net.js", "common/pow.js", "rooms.js", "background.js"]) {
+    const code = src(f).replace("const INSTANCE_SIZE = 20", "const INSTANCE_SIZE = " + INSTANCE_SIZE).replace("BITS: 7,", "BITS: 2,");
+    vm.runInContext(code, ctx, { filename: f });
+  }
 
   function connect(name, tab) {
     const msgHandlers = [];
@@ -277,7 +281,7 @@ await wait(50);
 check("forged hello rejected", !conn.open && pageRoomA().members.size === 1);
 
 // valid signature and tags, but bad or borrowed proof of work
-const scryptLib = (await import("module")).createRequire(import.meta.url)("../vendor/scrypt.js");
+const scryptLib = (await import("module")).createRequire(import.meta.url)("../common/scrypt.js");
 const enc = new TextEncoder();
 const bitsOf = (pk, n) => { const h = scryptLib.syncScrypt(enc.encode(`pagemates-identity:${pk}:${n}`), enc.encode("pagemates-pow-v2"), 4096, 8, 1, 32); let b = 0; for (const x of h) { if (x === 0) { b += 8; continue; } return b + Math.clz32(x) - 24; } return b; };
 async function tryHello(powValue, label) {

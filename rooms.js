@@ -18,33 +18,22 @@
 //
 // Chaque personne a une identité durable (clé Nostr locale) : elle signe la poignée de
 // main de chaque connexion, ce qui empêche de se faire passer pour quelqu'un d'autre en
-// MP et permet de bloquer une personne pour de bon. Pour que ce blocage tienne, une
-// identité coûte une preuve de travail (pow-worker.js) : on ne peut pas en recréer des
-// milliers pour revenir.
+// message privé et permet de bloquer une personne pour de bon. Pour que ce blocage tienne,
+// une identité coûte une preuve de travail : on ne peut pas en recréer des milliers.
+//
+// Limites, nettoyage, poignée de main signée et preuve de travail viennent du kit commun
+// (common/net.js, common/pow.js), identiques dans toutes les extensions.
 
-const NOSTR_RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net", "wss://nostr.mom"];
 const PRESENCE_EVERY = 60 * 1000;
 const PRESENCE_TTL = 150; // secondes
 const INSTANCE_SIZE = 20; // taille visée d'une instance
-const MAX_PEERS = 24; // limite dure : un peu de marge quand plusieurs arrivent en même temps
+const MAX_PEERS = LIMITS.MAX_PEERS; // limite dure : un peu de marge quand plusieurs arrivent en même temps
 const PICK_WAIT = 3000; // temps laissé aux relais pour dire qui est déjà là, avant de choisir l'instance
 const CHAT_LIMIT = 200;
-const TEXT_MAX = 500;
-const HELLO_KIND = 27235; // éphémère : jamais publié, sert seulement à signer la poignée de main
-const POW_BITS = 7; // bits à zéro exigés : ~128 essais de scrypt, une vingtaine de secondes
-const POW_VERSION = 2; // change avec les réglages de pow-worker.js : les anciennes preuves sont recalculées
 const EARLY_MAX = 20; // messages gardés de côté pendant la vérification d'une poignée de main
 
-// Anti-flood. Les limites sont fixes et identiques pour tous : la réception tolère un peu
-// plus que l'envoi, si bien qu'une extension normale n'est jamais filtrée. Seul un client
-// modifié se heurte à la limite de réception : au-delà, ses messages sont ignorés, et s'il
-// insiste il est mis en sourdine une minute.
-const SEND_PER_SECOND = 2; // chat et MP envoyés
-const RECV_PER_SECOND = 3; // chat et MP acceptés, par personne
-const LIVE_PER_SECOND = 40; // curseurs, clics, surlignages
-const META_PER_SECOND = 4; // profil
-const FLOOD_DROPS = 30;
-const FLOOD_MUTE = 60 * 1000;
+// Anti-flood : limites fixes du kit (LIMITS). Seul un client modifié se heurte à la limite
+// de réception : au-delà, ses messages sont ignorés, et s'il insiste il est mis en sourdine.
 
 // roomKey → salon
 const rooms = new Map();
@@ -53,15 +42,7 @@ const sitePeers = new Map();
 
 let nostrPool = null;
 const pool = () => (nostrPool ??= new NostrTools.SimplePool());
-const nowSeconds = () => Math.floor(Date.now() / 1000);
-
-// Compteur glissant sur une seconde
-function rateOk(times, limit, now = Date.now()) {
-  while (times.length && now - times[0] >= 1000) times.shift();
-  if (times.length >= limit) return false;
-  times.push(now);
-  return true;
-}
+const pow = createPow({ app: "pagemates", worker: "common/pow-worker.js" });
 
 // --- PeerJS partagé par les salons d'un site ----------------------------------------------
 
@@ -224,7 +205,7 @@ function publishPresence(room, leaving = false) {
   const created = nowSeconds();
   const event = NostrTools.finalizeEvent(
     {
-      kind: 30078,
+      kind: PRESENCE_KIND,
       created_at: created,
       tags: [["d", room.tag], ["t", room.tag], ["expiration", String(created + (leaving ? 30 : PRESENCE_TTL))]],
       content: JSON.stringify(leaving ? { v: 2, left: true } : { v: 2, peer: room.sp.id, inst: room.inst }),
@@ -237,7 +218,7 @@ function publishPresence(room, leaving = false) {
 }
 
 function subscribePresence(room) {
-  room.sub = pool().subscribeMany(NOSTR_RELAYS, [{ kinds: [30078], "#t": [room.tag], since: nowSeconds() - PRESENCE_TTL }], {
+  room.sub = pool().subscribeMany(NOSTR_RELAYS, [{ kinds: [PRESENCE_KIND], "#t": [room.tag], since: nowSeconds() - PRESENCE_TTL }], {
     onevent(e) {
       if (rooms.get(room.key) !== room) return;
       const expiration = Number(e.tags.find((tag) => tag[0] === "expiration")?.[1] ?? 0);
@@ -278,38 +259,7 @@ function discovered(room, { peer: peerId, inst }) {
   setupConn(room, room.sp.peer.connect(peerId, { serialization: "json", reliable: true, metadata: { room: room.key } }));
 }
 
-// --- Preuve de travail ---------------------------------------------------------------
-
-let powVerifier = null;
-let powSeq = 0;
-const powWaiting = new Map();
-const powOk = new Map(); // pubkey → { nonce, code } déjà vérifiés
-
-// Preuve d'une identité → { bits (à zéro), code (affiché à côté du nom) }, calcul dans un worker
-function powCheck(pubkey, nonce) {
-  const known = powOk.get(pubkey);
-  if (known?.nonce === nonce) return Promise.resolve({ bits: POW_BITS, code: known.code });
-  if (!powVerifier) {
-    powVerifier = new Worker("pow-worker.js");
-    powVerifier.onmessage = ({ data }) => {
-      powWaiting.get(data.req)?.({ bits: data.bits, code: data.code });
-      powWaiting.delete(data.req);
-    };
-  }
-  const req = ++powSeq;
-  powVerifier.postMessage({ t: "verify", req, pubkey, nonce });
-  return new Promise((resolve) => powWaiting.set(req, resolve));
-}
-
 // --- Connexions et poignée de main ----------------------------------------------------
-
-function safeSend(conn, msg) {
-  try {
-    if (conn?.open) conn.send(msg);
-  } catch {
-    // connexion en train de tomber : le « close » suivra
-  }
-}
 
 function setupConn(room, conn) {
   if (room.members.size + room.pending.size >= MAX_PEERS || !room.inst) {
@@ -322,16 +272,8 @@ function setupConn(room, conn) {
   }, 15000);
 
   conn.on("open", () => {
-    const ev = NostrTools.finalizeEvent(
-      {
-        kind: HELLO_KIND,
-        created_at: nowSeconds(),
-        tags: [["from", room.sp.id], ["to", conn.peer], ["room", room.key], ["inst", String(room.inst)], ["pow", String(identity.pow)]],
-        content: "",
-      },
-      identity.secret
-    );
-    safeSend(conn, { t: "hello", ev, name: settings.name, color: settings.color });
+    const tags = [["from", room.sp.id], ["to", conn.peer], ["room", room.key], ["inst", String(room.inst)], ["pow", String(identity.pow)]];
+    safeSend(conn, { t: "hello", ev: signHello(identity.secret, tags), name: settings.name, color: settings.color });
   });
   conn.on("data", (msg) => {
     clearTimeout(timeout);
@@ -352,41 +294,17 @@ function dropConn(room, conn) {
   }
 }
 
-function verifyHello(room, conn, msg) {
-  const ev = msg?.ev;
-  if (!ev || typeof ev !== "object" || ev.kind !== HELLO_KIND) return null;
-  try {
-    if (!NostrTools.verifyEvent(ev)) return null;
-  } catch {
-    return null; // événement mal formé
-  }
-  const tag = (k) => ev.tags.find((x) => x[0] === k)?.[1];
-  if (tag("from") !== conn.peer || tag("to") !== room.sp.id || tag("room") !== room.key) return null;
-  if (tag("inst") !== String(room.inst)) return null;
-  if (Math.abs(nowSeconds() - ev.created_at) > 300) return null;
-  return ev.pubkey;
-}
-
-function cleanName(name) {
-  return String(name ?? "").replace(/\s+/g, " ").trim().slice(0, 24) || "?";
-}
-
-function cleanColor(color) {
-  return /^#[0-9a-f]{6}$/i.test(color) ? color.toLowerCase() : "#888888";
-}
-
 function onData(room, conn, msg) {
   if (rooms.get(room.key) !== room || !msg || typeof msg !== "object") return;
 
   if (msg.t === "hello" && room.pending.get(conn.peer) === conn && !conn.checking) {
-    const id = verifyHello(room, conn, msg);
+    const id = verifyHello(msg.ev, { from: conn.peer, to: room.sp.id, room: room.key, inst: room.inst });
     if (!id || id === identity.pubkey || settings.blocked[id]) return conn.close();
     const nonce = Number(msg.ev.tags.find((x) => x[0] === "pow")?.[1]);
     if (!Number.isSafeInteger(nonce) || nonce < 0) return conn.close();
     conn.checking = true;
-    powCheck(id, nonce).then(({ bits, code }) => {
-      if (bits < POW_BITS) return conn.close();
-      powOk.set(id, { nonce, code });
+    pow.check(id, nonce).then(({ bits, code }) => {
+      if (bits < POW.BITS) return conn.close();
       if (rooms.get(room.key) === room && room.pending.get(conn.peer) === conn && conn.open) acceptMember(room, conn, id, msg, code);
     });
     return;
@@ -438,10 +356,10 @@ function onMemberData(room, m, msg) {
   const live = ["cur", "click", "sel", "draw", "undraw"].includes(msg.t);
   const chatty = msg.t === "chat" || msg.t === "dm";
   const ok = live
-    ? rateOk(m.liveTimes, LIVE_PER_SECOND, now)
+    ? rateOk(m.liveTimes, LIMITS.LIVE_PER_SECOND, now)
     : chatty
-      ? rateOk(m.chatTimes, RECV_PER_SECOND, now)
-      : rateOk(m.metaTimes, META_PER_SECOND, now);
+      ? rateOk(m.chatTimes, LIMITS.RECV_PER_SECOND, now)
+      : rateOk(m.metaTimes, LIMITS.META_PER_SECOND, now);
   if (!ok) return flooded(room, m, now);
 
   switch (msg.t) {
@@ -455,14 +373,14 @@ function onMemberData(room, m, msg) {
       break;
     }
     case "chat": {
-      const text = String(msg.text ?? "").slice(0, TEXT_MAX).trim();
+      const text = cleanText(msg.text);
       if (!text) return;
       addChat(room.chat, { from: m.id, name: m.name, color: m.color, text });
       update();
       break;
     }
     case "dm": {
-      const text = String(msg.text ?? "").slice(0, TEXT_MAX).trim();
+      const text = cleanText(msg.text);
       if (text) receiveDm(m, text);
       break;
     }
@@ -501,11 +419,8 @@ function onMemberData(room, m, msg) {
 }
 
 function flooded(room, m, now) {
-  m.drops.push(now);
-  while (m.drops.length && now - m.drops[0] > 10000) m.drops.shift();
-  if (m.drops.length < FLOOD_DROPS) return;
-  m.drops = [];
-  m.mutedUntil = now + FLOOD_MUTE;
+  if (!floodCheck(m.drops, now)) return;
+  m.mutedUntil = now + LIMITS.FLOOD_MUTE;
   systemMessage(room.chat, "sysFlood", m.name);
   update();
 }
@@ -584,9 +499,9 @@ function systemMessage(list, key, ...args) {
 function sendChat(tab, kind, text) {
   const room = rooms.get(kind === "page" ? tab?.pageKey : tab?.siteKey);
   if (!room || roomStatus(room) !== "open") return "errNotConnected";
-  text = String(text ?? "").slice(0, TEXT_MAX).trim();
+  text = cleanText(text);
   if (!text) return null;
-  if (!rateOk(sendTimes, SEND_PER_SECOND)) return "errTooFast";
+  if (!rateOk(sendTimes, LIMITS.SEND_PER_SECOND)) return "errTooFast";
   for (const m of room.members.values()) safeSend(m.conn, { t: "chat", text });
   addChat(room.chat, { from: "me", name: settings.name, color: settings.color, text });
   update();
@@ -625,9 +540,9 @@ function memberAnywhere(id) {
 function sendDm(id, text) {
   const m = memberAnywhere(id);
   if (!m) return "errDmOffline";
-  text = String(text ?? "").slice(0, TEXT_MAX).trim();
+  text = cleanText(text);
   if (!text) return null;
-  if (!rateOk(sendTimes, SEND_PER_SECOND)) return "errTooFast";
+  if (!rateOk(sendTimes, LIMITS.SEND_PER_SECOND)) return "errTooFast";
   safeSend(m.conn, { t: "dm", text });
   addChat(dmThread(id).msgs, { from: "me", name: settings.name, color: settings.color, text });
   update();
@@ -641,7 +556,7 @@ function relayLive(tab, msg) {
   if (!room) return;
   if (msg.t === "draw" || msg.t === "undraw") return relayInk(tab, room, msg);
   if (msg.t === "sel" ? !settings.shareSelection : !settings.shareCursor) return;
-  if (!rateOk(tab.liveTimes, LIVE_PER_SECOND / 2)) return;
+  if (!rateOk(tab.liveTimes, LIMITS.LIVE_PER_SECOND / 2)) return;
   const payload = msg.t === "sel" ? (msg.q == null ? null : cleanQuote(msg.q)) : msg.a == null ? null : cleanAnchor(msg.a);
   if (payload === undefined) return;
   const out = msg.t === "sel" ? { t: "sel", q: payload } : { t: msg.t, a: payload };
