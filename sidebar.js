@@ -35,7 +35,6 @@ port.onMessage.addListener((msg) => {
   if (setLang(snap.settings.lang) || !translated) {
     translated = true;
     applyI18n();
-    translateGoForm();
     lastChat = "";
   }
   render();
@@ -170,7 +169,7 @@ function renderRoom(room, status) {
   const isDm = tab === "dm";
   const people = room?.people ?? [];
 
-  renderInstances(isDm ? null : room);
+  renderWhere(room);
   $("#people").hidden = isDm;
   $("#dm-list").hidden = !isDm;
   $("#status").hidden = isDm || status === "open";
@@ -232,45 +231,105 @@ function renderRoom(room, status) {
     : t(tab === "page" ? "chatPagePlaceholder" : "chatSitePlaceholder");
 }
 
-// Canaux du salon : le nôtre, les autres (clic pour y passer), « + » pour en ouvrir un vide,
-// et un champ pour aller directement sur un numéro
-const chipsBox = el("span", { id: "instance-chips" });
-const addButton = el("button", { className: "small", textContent: "+" });
-addButton.addEventListener("click", () => switchInstance("new"));
-const goInput = el("input", { type: "number", min: 1, max: 9999 });
-const goForm = el("form", { id: "instance-go" }, goInput, el("button", { className: "small" }));
-goForm.addEventListener("submit", (e) => {
-  e.preventDefault();
-  const n = Number(goInput.value);
-  if (!n) return;
-  goInput.value = "";
-  switchInstance(n);
-});
-const instanceLabel = el("span", { className: "muted" });
-$("#instances").append(instanceLabel, chipsBox, addButton, goForm);
+// --- Où l'on se trouve : adresse du salon et canal --------------------------------------
 
-function translateGoForm() {
-  instanceLabel.textContent = t("instance");
-  addButton.title = t("instanceNew");
-  goInput.placeholder = t("instanceNumber");
-  goForm.title = t("instanceNumberHelp");
-  goForm.lastChild.textContent = t("instanceGo");
+const decode = (s) => {
+  try {
+    return decodeURIComponent(s.replace(/\+/g, " "));
+  } catch {
+    return s;
+  }
+};
+const short = (s, n = 18) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
+
+// Un morceau d'adresse cliquable ; barré quand il ne compte pas pour le salon
+function token(text, on, title, onClick) {
+  const b = el("button", { className: "token" + (on ? "" : " off"), textContent: text, title });
+  b.addEventListener("click", onClick);
+  return b;
 }
 
-// Seuls les boutons de canaux sont refaits : le champ garde sa saisie et le focus
-function renderInstances(room) {
-  const bar = $("#instances");
-  bar.hidden = !room?.inst;
-  if (bar.hidden) return;
-  chipsBox.replaceChildren(
+// Onglet Site : le site. Onglet Page : l'adresse en morceaux. Un clic sur un paramètre
+// l'inclut ou l'exclut ; un clic sur un morceau du chemin coupe l'adresse après lui
+// (un salon par section), un nouveau clic la rétablit en entier.
+function renderWhere(room) {
+  const where = $("#where");
+  where.hidden = tab === "dm" || !snap.ctx;
+  if (where.hidden) return;
+  const { site, parts } = snap.ctx;
+  const items = [el("strong", { className: "where-site", textContent: site })];
+  if (tab === "page" && parts) {
+    const kept = parts.depth ?? parts.segments.length;
+    parts.segments.forEach((seg, i) => {
+      const on = i < kept;
+      let next = on && i + 1 === kept ? null : i + 1;
+      if (next === parts.segments.length) next = null;
+      const title = on ? (i + 1 === kept ? (parts.depth == null ? t("pathLast") : t("pathRestore")) : t("pathCut")) : t("pathExtend");
+      items.push(token("/" + short(decode(seg), 24), on, title, () => act("setPageDepth", site, next)));
+    });
+    parts.params.forEach((p, i) => {
+      const label = (i ? "&" : "?") + p.name + (p.value ? "=" + short(decode(p.value)) : "");
+      items.push(token(label, p.on, t(p.on ? "paramExclude" : "paramInclude", p.name), () => act("setPageParam", site, p.name, !p.on)));
+    });
+    if (parts.custom) {
+      const reset = el("button", { className: "token reset", textContent: "↺", title: t("pageReset") });
+      reset.addEventListener("click", () => act("resetPage", site));
+      items.push(reset);
+    }
+  }
+  const path = $("#where-path");
+  path.replaceChildren(...items);
+  path.title = tab === "page" ? t("whereHelpPage") : t("whereHelpSite");
+  renderChannel(room);
+}
+
+// Canal : un bouton « Canal #1 · 3/20 ▾ » ouvre la liste des canaux, avec un champ pour
+// aller sur un numéro (donné par des amis, par exemple)
+let channelOpen = false;
+const goInput = $("#channel-go input");
+
+function renderChannel(room) {
+  const box = $("#channel");
+  box.hidden = !room?.inst;
+  if (box.hidden) return;
+  const count = room.instances.find((x) => x.n === room.inst)?.count ?? 1;
+  $("#channel-btn").textContent = `${t("instance")} #${room.inst} · ${count}/${snap.instanceSize} ▾`;
+  $("#channel-menu").hidden = !channelOpen;
+  $("#channel-list").replaceChildren(
     ...room.instances.map(({ n, count }) => {
       const b = el("button", { className: "small" + (n === room.inst ? " on" : ""), textContent: `#${n} · ${count}/${snap.instanceSize}` });
       b.title = n === room.inst ? t("instanceCurrent") : t("instanceJoin", n);
-      if (n !== room.inst) b.addEventListener("click", () => switchInstance(n));
+      b.addEventListener("click", () => {
+        closeChannel();
+        if (n !== room.inst) switchInstance(n);
+      });
       return b;
     })
   );
 }
+
+function closeChannel() {
+  channelOpen = false;
+  $("#channel-menu").hidden = true;
+}
+
+$("#channel-btn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  channelOpen = !channelOpen;
+  render();
+  if (channelOpen) goInput.focus();
+});
+$("#channel-menu").addEventListener("click", (e) => e.stopPropagation());
+document.addEventListener("click", () => channelOpen && closeChannel());
+document.addEventListener("keydown", (e) => e.key === "Escape" && channelOpen && closeChannel());
+$("#channel-go").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const n = Number(goInput.value);
+  if (!n) return;
+  goInput.value = "";
+  closeChannel();
+  switchInstance(n);
+});
 
 async function switchInstance(n) {
   const error = await ask("setInstance", windowId, tab, n);

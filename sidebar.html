@@ -36,7 +36,19 @@
     </div>
 
     <div id="room">
-      <div id="instances" hidden></div>
+      <div id="where" hidden>
+        <div id="where-path"></div>
+        <div id="channel" hidden>
+          <button id="channel-btn" class="small"></button>
+          <div id="channel-menu" hidden>
+            <div id="channel-list"></div>
+            <form id="channel-go">
+              <input type="number" min="1" max="9999" data-i18n-placeholder="instanceNumber">
+              <button class="small" data-i18n="instanceGo"></button>
+            </form>
+          </div>
+        </div>
+      </div>
       <div id="people"></div>
       <div id="dm-list" hidden></div>
       <p id="status" class="muted" hidden></p>

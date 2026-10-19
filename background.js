@@ -16,6 +16,7 @@ const DEFAULTS = {
   autoJoin: false, // rejoindre tous les sites sans demander
   sites: {}, // site → true (toujours rejoindre) | false (jamais)
   blocked: {}, // pubkey → dernier nom connu
+  pageRules: {}, // site → { depth, params: { nom: true | false } } : ce qui définit le salon de page
 };
 
 let settings = { ...DEFAULTS };
@@ -44,9 +45,17 @@ async function sha(text) {
 
 // --- Adresses ------------------------------------------------------------------------
 
-// Paramètres de pistage : retirés pour que deux personnes sur la même page tombent dans
-// le même salon, même arrivées par des liens différents
-const TRACKING = /^(utm_.*|fbclid|gclid|dclid|msclkid|mc_cid|mc_eid|igshid|yclid|_ga|_gl|ref|ref_src|si|spm|feature)$/i;
+// Ce qui définit le salon d'une page : le site, le chemin et les paramètres retenus.
+// Chacun peut, depuis la barre latérale, inclure ou exclure un paramètre, ou couper le
+// chemin (un salon par section : reddit.com/r/france). Choix retenus par site, sans règle
+// propre à tel ou tel site : deux personnes se retrouvent dès qu'elles obtiennent la
+// même adresse.
+//
+// Paramètres exclus par défaut, parce qu'ils ne changent pas ce qu'on regarde : pistage,
+// position dans une vidéo, contexte d'arrivée (playlist…). Deux personnes arrivées par
+// des liens différents tombent ainsi dans le même salon.
+const IGNORED_PARAMS =
+  /^(utm_.*|fbclid|gclid|dclid|msclkid|mc_cid|mc_eid|igshid|yclid|_ga|_gl|ref|ref_src|si|spm|feature|t|start|list|index|start_radio|pp|ab_channel)$/i;
 const PRIVATE_HOST = /^(localhost|\d+\.\d+\.\d+\.\d+|\[.*\])(:\d+)?$|\.(local|lan|home|internal|localhost)(:\d+)?$/i;
 
 function normalize(href) {
@@ -58,10 +67,14 @@ function normalize(href) {
   }
   if (u.protocol !== "https:" && u.protocol !== "http:") return null;
   const site = u.host.toLowerCase().replace(/^www\./, "");
-  const params = [...u.searchParams].filter(([k]) => !TRACKING.test(k)).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-  const query = params.length ? "?" + new URLSearchParams(params) : "";
-  const path = u.pathname.replace(/\/+$/, "") || "/";
-  return { site, page: site + path + query };
+  const rule = settings.pageRules[site] ?? {};
+  const segments = u.pathname.split("/").filter(Boolean);
+  const depth = Number.isInteger(rule.depth) && rule.depth >= 1 && rule.depth < segments.length ? rule.depth : null;
+  const params = [...u.searchParams].map(([name, value]) => ({ name, value, on: rule.params?.[name] ?? !IGNORED_PARAMS.test(name) }));
+  const kept = params.filter((p) => p.on).map((p) => [p.name, p.value]).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  const query = kept.length ? "?" + new URLSearchParams(kept) : "";
+  const path = "/" + segments.slice(0, depth ?? segments.length).join("/");
+  return { site, page: site + path + query, parts: { segments, depth, params, custom: !!settings.pageRules[site] } };
 }
 
 function siteEnabled(site) {
@@ -149,19 +162,9 @@ function connectPage(port) {
     lastPeers: "",
   };
   port.postMessage(contentConfig());
-  port.onMessage.addListener(async (msg) => {
-    if (msg.t === "url") {
-      tab.url = msg.url;
-      const n = normalize(msg.url);
-      const keys = n ? await Promise.all([sha("site:" + n.site), sha("page:" + n.page)]) : ["", ""];
-      if (tab.url !== msg.url) return; // l'adresse a encore changé entre-temps
-      const previous = lastPageOfTab.get(tab.id);
-      if (previous && previous !== keys[1]) leftPages.add(previous);
-      Object.assign(tab, { site: n?.site ?? "", siteKey: keys[0], pageKey: keys[1], lastPeers: "" });
-      tabs.set(tab.id, tab);
-      lastPageOfTab.set(tab.id, tab.pageKey);
-      reconcile();
-    } else if (msg.t === "cur" || msg.t === "click" || msg.t === "sel") {
+  port.onMessage.addListener((msg) => {
+    if (msg.t === "url") applyUrl(tab, msg.url);
+    else if (msg.t === "cur" || msg.t === "click" || msg.t === "sel") {
       if (tabs.get(tab.id) === tab) relayLive(tab, msg);
     }
   });
@@ -170,6 +173,31 @@ function connectPage(port) {
     tabs.delete(tab.id);
     reconcile();
   });
+}
+
+// Adresse d'un onglet → ses salons (aussi rappelé quand on change ce qui définit la page)
+async function applyUrl(tab, url) {
+  tab.url = url;
+  const n = normalize(url);
+  const keys = n ? await Promise.all([sha("site:" + n.site), sha("page:" + n.page)]) : ["", ""];
+  if (tab.url !== url) return; // l'adresse a encore changé entre-temps
+  const previous = lastPageOfTab.get(tab.id);
+  if (previous && previous !== keys[1]) leftPages.add(previous);
+  Object.assign(tab, { site: n?.site ?? "", siteKey: keys[0], pageKey: keys[1], parts: n?.parts ?? null, lastPeers: "" });
+  tabs.set(tab.id, tab);
+  lastPageOfTab.set(tab.id, tab.pageKey);
+  reconcile();
+}
+
+function setPageRule(site, change) {
+  if (typeof site !== "string" || !site) return;
+  const rule = { params: {}, ...settings.pageRules[site] };
+  change(rule);
+  const empty = rule.depth == null && !Object.keys(rule.params).length;
+  const { [site]: _, ...rest } = settings.pageRules;
+  settings.pageRules = empty ? rest : { ...rest, [site]: rule };
+  saveSettings();
+  for (const tab of tabs.values()) if (tab.site === site) applyUrl(tab, tab.url);
 }
 
 // Personnes présentes sur la page de cet onglet → script de la page et badge du bouton
@@ -222,7 +250,7 @@ function snapshot(windowId) {
     instanceSize: INSTANCE_SIZE,
     sendRate: SEND_PER_SECOND,
     mining: mining && { tries: mining.tries, expected: 2 ** POW_BITS },
-    ctx: tab?.site ? { site: tab.site, enabled: siteEnabled(tab.site), incognito: tab.incognito } : null,
+    ctx: tab?.site ? { site: tab.site, parts: tab.parts, enabled: siteEnabled(tab.site), incognito: tab.incognito } : null,
     page: roomInfo(pageRoom),
     site: roomInfo(tab && rooms.get(tab.siteKey), pageRoom ?? { members: new Map() }),
     dms: [...dms].map(([id, th]) => ({
@@ -240,7 +268,7 @@ function snapshot(windowId) {
 function cleanSettings(patch) {
   const out = {};
   for (const [k, v] of Object.entries(patch)) {
-    if (!(k in DEFAULTS) || k === "blocked") continue;
+    if (!(k in DEFAULTS) || k === "blocked" || k === "pageRules") continue;
     if (k === "name") out.name = cleanName(v);
     else if (k === "color") out.color = cleanColor(v);
     else if (k === "view") out.view = ["both", "page", "site"].includes(v) ? v : "both";
@@ -282,6 +310,28 @@ const commands = {
   },
   chat(windowId, kind, text) {
     return sendChat(tabs.get(activeTab.get(windowId)), kind, text);
+  },
+  // Ce qui définit le salon de page sur un site : inclure / exclure un paramètre,
+  // couper le chemin après n morceaux (null = chemin entier), ou tout remettre par défaut
+  setPageParam(site, name, on) {
+    if (typeof name !== "string" || name.length > 100) return;
+    setPageRule(site, (rule) => {
+      const byDefault = !IGNORED_PARAMS.test(name);
+      if (!!on === byDefault) delete rule.params[name];
+      else rule.params[name] = !!on;
+    });
+  },
+  setPageDepth(site, depth) {
+    setPageRule(site, (rule) => {
+      rule.depth = Number.isInteger(depth) && depth >= 1 && depth <= 50 ? depth : null;
+      if (rule.depth == null) delete rule.depth;
+    });
+  },
+  resetPage(site) {
+    setPageRule(site, (rule) => {
+      delete rule.depth;
+      rule.params = {};
+    });
   },
   // Passer dans une autre instance du salon de page ou de site (n, ou "new")
   setInstance(windowId, kind, n) {

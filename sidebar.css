@@ -58,10 +58,17 @@ header { display: flex; align-items: center; gap: 6px; padding: 8px; border-bott
 .person .swatch { width: 8px; height: 8px; border-radius: 50%; }
 .person button { border: 0; background: none; padding: 0 2px; }
 .person .tag { font-size: 11px; }
-#instances { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px 8px 0; }
-#instance-chips { display: contents; }
-#instance-go { display: inline-flex; gap: 2px; margin-left: auto; }
-#instance-go input { width: 56px; padding: 1px 4px; font-size: 12px; }
+#where { display: flex; align-items: flex-start; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+#where-path { flex: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 2px; min-width: 0; }
+.where-site { margin-right: 2px; overflow-wrap: anywhere; }
+.token { padding: 0 4px; font-size: 12px; border-color: transparent; background: var(--active); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.token.off { background: none; color: var(--muted); text-decoration: line-through; border-color: var(--border); border-style: dashed; }
+.token.reset { background: none; border-color: var(--border); }
+#channel { position: relative; flex: none; }
+#channel-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 10; min-width: 170px; padding: 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); box-shadow: 0 4px 12px rgba(0,0,0,.2); }
+#channel-list { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+#channel-go { display: flex; gap: 4px; }
+#channel-go input { width: 90px; padding: 1px 4px; font-size: 12px; }
 #status, #error { margin: 0; padding: 4px 8px; }
 #error { color: var(--bad); }
 
