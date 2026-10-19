@@ -21,7 +21,8 @@ const DEFAULTS = {
 };
 
 let settings = { ...DEFAULTS };
-let identity = { secret: null, pubkey: "" };
+let identity = { secret: null, pubkey: "", pow: null };
+let mining = null; // { tries } pendant le calcul de la preuve de travail
 const sendTimes = [];
 
 // tabId → { id, windowId, port, url, site, siteKey, pageKey, incognito, liveTimes, lastPeers }
@@ -96,7 +97,8 @@ function wantedRooms() {
 }
 
 function reconcile() {
-  const wanted = wantedRooms();
+  // Sans preuve de travail, personne n'accepterait nos poignées de main : on attend
+  const wanted = identity.pow == null ? new Map() : wantedRooms();
   for (const [key, { kind, siteKey, site }] of wanted) {
     clearTimeout(closing.get(key));
     closing.delete(key);
@@ -220,6 +222,7 @@ function snapshot(windowId) {
     palette: PALETTE,
     me: identity.pubkey,
     instanceSize: INSTANCE_SIZE,
+    mining: mining && { tries: mining.tries, expected: 2 ** POW_BITS },
     ctx: tab?.site ? { site: tab.site, enabled: siteEnabled(tab.site), incognito: tab.incognito } : null,
     page: roomInfo(pageRoom),
     site: roomInfo(tab && rooms.get(tab.siteKey), pageRoom ?? { members: new Map() }),
@@ -362,16 +365,38 @@ browser.runtime.onInstalled.addListener(async () => {
   }
 });
 
+// Preuve de travail de notre identité : une seule fois, puis gardée avec la clé
+function mineIdentity() {
+  mining = { tries: 0 };
+  const worker = new Worker("pow-worker.js");
+  worker.onmessage = ({ data }) => {
+    if (data.t === "progress") {
+      mining.tries = data.tries;
+      return update();
+    }
+    worker.terminate();
+    mining = null;
+    identity.pow = data.nonce;
+    browser.storage.local.set({ pow: { pubkey: identity.pubkey, nonce: data.nonce } });
+    log(t("logPowDone"));
+    reconcile();
+  };
+  worker.postMessage({ t: "mine", pubkey: identity.pubkey, bits: POW_BITS });
+  update();
+}
+
 async function init() {
-  const stored = await browser.storage.local.get(["settings", "identity"]);
+  const stored = await browser.storage.local.get(["settings", "identity", "pow"]);
   settings = { ...DEFAULTS, ...stored.settings };
   if (!settings.name) settings.name = `${t("defaultName")}-${Math.floor(1000 + Math.random() * 9000)}`;
   if (!settings.color) settings.color = PALETTE[Math.floor(Math.random() * PALETTE.length)];
   setLang(settings.lang);
   let secret = typeof stored.identity === "string" && /^[0-9a-f]{64}$/.test(stored.identity) ? stored.identity : null;
   if (!secret) secret = hex(NostrTools.generateSecretKey());
-  identity = { secret: unhex(secret), pubkey: NostrTools.getPublicKey(unhex(secret)) };
+  identity = { secret: unhex(secret), pubkey: NostrTools.getPublicKey(unhex(secret)), pow: null };
+  if (stored.pow?.pubkey === identity.pubkey && Number.isSafeInteger(stored.pow.nonce)) identity.pow = stored.pow.nonce;
   await browser.storage.local.set({ settings, identity: secret });
+  if (identity.pow == null) mineIdentity();
   for (const tab of await browser.tabs.query({ active: true })) activeTab.set(tab.windowId, tab.id);
 }
 

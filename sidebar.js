@@ -97,6 +97,15 @@ function render() {
   if (!snap) return;
   const { settings, ctx } = snap;
 
+  // Calcul de la preuve de travail au premier lancement : les essais sont tirés au hasard,
+  // l'avancement n'est qu'une estimation (plafonnée à 99 %)
+  $("#mining").hidden = !snap.mining;
+  if (snap.mining) {
+    const pct = Math.min(99, Math.round((snap.mining.tries / snap.mining.expected) * 100));
+    $("#mining-title").textContent = t("miningTitle", pct);
+    $("#mining-bar").value = pct;
+  }
+
   // Salons affichés selon le réglage
   $("#tabs [data-tab=page]").hidden = settings.view === "site";
   $("#tabs [data-tab=site]").hidden = settings.view === "page";

@@ -8,6 +8,8 @@ const STRINGS = {
     tabPage: "Page",
     tabSite: "Site",
     tabDm: "MP",
+    miningTitle: "Création de ton identité anti-spam… {0} %",
+    miningHelp: "Une seule fois, environ 30 secondes : ce petit calcul rend les faux comptes coûteux, pour que les blocages tiennent. Les salons s'ouvrent juste après.",
     noPage: "Ouvre une page web pour voir son salon.",
     privateWindow: "Désactivé en navigation privée.",
     disconnected: "Tu es déconnecté de tous les salons.",
@@ -93,6 +95,7 @@ const STRINGS = {
     sysInstance: "Tu es maintenant sur le canal #{0}",
     // Journal
     logPresenceFailed: "Annonce de présence impossible (relais Nostr injoignables)",
+    logPowDone: "Identité anti-spam prête",
   },
   en: {
     settings: "Settings",
@@ -100,6 +103,8 @@ const STRINGS = {
     tabPage: "Page",
     tabSite: "Site",
     tabDm: "DMs",
+    miningTitle: "Creating your anti-spam identity… {0}%",
+    miningHelp: "Only once, about 30 seconds: this small computation makes fake accounts costly, so blocks hold. Rooms open right after.",
     noPage: "Open a web page to see its room.",
     privateWindow: "Disabled in private browsing.",
     disconnected: "You're disconnected from every room.",
@@ -182,6 +187,7 @@ const STRINGS = {
     sysFlood: "{0} is sending too many messages: muted for a minute",
     sysInstance: "You're now on channel #{0}",
     logPresenceFailed: "Couldn't announce presence (Nostr relays unreachable)",
+    logPowDone: "Anti-spam identity ready",
   },
 };
 

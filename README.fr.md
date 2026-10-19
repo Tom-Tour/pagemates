@@ -17,7 +17,7 @@ Une extension Firefox qui transforme chaque page web en salon : discute avec les
 - **Canaux**, comme dans les jeux en ligne : un salon accueille jusqu'à 20 personnes ; au-delà, les nouveaux arrivants ouvrent le canal #2, #3… Choisis n'importe quel canal par son numéro (donne-le à tes amis pour vous retrouver), passe sur un autre, ou ouvre-en un vide
 - **Messages privés** à toute personne avec qui tu partages un salon
 - **Anti-flood** : limite le nombre de messages que tu envoies par seconde, et ceux que tu acceptes par seconde de chaque personne ; quelqu'un qui insiste est mis en sourdine une minute
-- **Bloquer** quelqu'un pour de bon (les identités sont des clés signées : personne ne peut se faire passer pour quelqu'un d'autre)
+- **Bloquer** quelqu'un pour de bon : les identités sont des clés signées, donc personne ne peut se faire passer pour quelqu'un d'autre, et chaque identité coûte une preuve de travail (voir plus bas), donc une personne bloquée ne peut pas simplement revenir avec des milliers de nouvelles
 - **Se déconnecter** de tout en un clic, ou quitter un seul site
 - Français et anglais
 
@@ -29,6 +29,12 @@ Une extension Firefox qui transforme chaque page web en salon : discute avec les
 - Comme pour toute connexion pair-à-pair, les personnes auxquelles tu es connecté peuvent voir ton adresse IP
 - Les positions de curseur ne contiennent jamais le texte de la page. Les surlignages envoient le texte sélectionné (désactivable). Les champs de formulaire ne sont jamais lus
 - Pas d'historique : les messages restent en mémoire et disparaissent quand tu pars
+
+## Preuve de travail anti-spam
+
+Au premier lancement, l'extension passe une trentaine de secondes (une seule fois) à chercher un nombre tel que `scrypt(identité + nombre)` commence par 8 bits à zéro. Les autres le vérifient en une fraction de seconde pendant la poignée de main et refusent les identités qui n'en ont pas. scrypt demande 16 Mo de mémoire par essai : les cartes graphiques n'y gagnent presque rien, contrairement à un simple hachage.
+
+Les faux comptes, gratuits jusque-là, deviennent coûteux : mille identités demandent environ une heure à un script qui tourne dans un navigateur, même en utilisant tous les cœurs. Un attaquant déterminé, avec une machine puissante et du code optimisé, met encore quelques minutes : c'est une barrière contre le spam ordinaire, pas une forteresse.
 
 ## Installation (développement)
 
@@ -43,6 +49,8 @@ Les réglages de la barre latérale (⚙) se terminent par une section **À prop
 - `content.js` tourne dans chaque page : envoie ton curseur, tes clics et ta sélection, et dessine ceux des autres dans un calque en Shadow DOM fermé
 - `rooms.js` : un réseau pair-à-pair par salon et par canal (PeerJS, une seule connexion à son serveur par site), présence sur Nostr (qui dit aussi qui est sur quel canal), poignée de main signée, chat, messages privés, limites de débit
 - `background.js` : réglages, onglets, lien avec la barre latérale
+- `pow-worker.js` : preuve de travail, calculée hors du fil principal
+- Librairies : [PeerJS](https://peerjs.com), [nostr-tools](https://github.com/nbd-wtf/nostr-tools), [scrypt-js](https://github.com/ricmoo/scrypt-js) (MIT)
 
 ## Soutenir
 

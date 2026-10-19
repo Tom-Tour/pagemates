@@ -17,7 +17,7 @@ A Firefox extension that turns every web page into a room: chat with the people 
 - **Channels**, like in online games: a room holds up to 20 people; beyond that, newcomers open channel #2, #3… Pick any channel by its number (give it to your friends to meet up), switch to another one, or open an empty one
 - **Private messages** to anyone you share a room with
 - **Anti-flood**: limit the messages you send per second, and the messages you accept per second from each person; someone who keeps flooding is muted for a minute
-- **Block** someone for good (identities are signed keys, so nobody can impersonate them)
+- **Block** someone for good: identities are signed keys, so nobody can impersonate them, and each identity costs a proof of work (see below), so a blocked person can't just come back with thousands of new ones
 - **Disconnect** from everything in one click, or leave a single site
 - English and French
 
@@ -29,6 +29,12 @@ A Firefox extension that turns every web page into a room: chat with the people 
 - As with any peer-to-peer connection, the people you're connected to can see your IP address
 - Cursor positions never contain page text. Highlights do send the selected text (you can turn that off). Form fields are never read
 - No history: messages live in memory only and vanish when you leave
+
+## Anti-spam proof of work
+
+On first launch, the extension spends about 30 seconds (only once) finding a number that makes `scrypt(identity + number)` start with 8 zero bits. Others check it in a fraction of a second during the handshake and refuse identities without it. scrypt needs 16 MB of memory per try, so graphics cards barely speed it up, unlike a plain hash.
+
+It turns "free" fake accounts into costly ones: a thousand identities take a script running in a browser about an hour, even using every core. A determined attacker with a powerful machine and optimized code still needs minutes: it's a barrier against casual spam, not a fortress.
 
 ## Install (development)
 
@@ -43,6 +49,8 @@ The sidebar settings (⚙) end with an **About** section linking to this page an
 - `content.js` runs in every page: sends your cursor, clicks and selection, and draws other people's in a closed Shadow DOM layer
 - `rooms.js`: one peer-to-peer mesh per room and channel (PeerJS, one connection to its server per site), presence on Nostr (which also tells who is on which channel), signed handshake, chat, private messages, rate limits
 - `background.js`: settings, tabs, sidebar link
+- `pow-worker.js`: proof of work, computed off the main thread
+- Third-party: [PeerJS](https://peerjs.com), [nostr-tools](https://github.com/nbd-wtf/nostr-tools), [scrypt-js](https://github.com/ricmoo/scrypt-js) (MIT)
 
 ## Support
 

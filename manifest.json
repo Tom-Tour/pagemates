@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Pagemates",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Every web page is a room: chat with people on the same page or site, see their cursors, clicks and highlights.",
   "browser_specific_settings": {
     "gecko": { "id": "pagemates@tom-tour", "strict_min_version": "128.0" }

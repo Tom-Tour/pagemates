@@ -15,7 +15,9 @@
 //
 // Chaque personne a une identité durable (clé Nostr locale) : elle signe la poignée de
 // main de chaque connexion, ce qui empêche de se faire passer pour quelqu'un d'autre en
-// MP et permet de bloquer une personne pour de bon.
+// MP et permet de bloquer une personne pour de bon. Pour que ce blocage tienne, une
+// identité coûte une preuve de travail (pow-worker.js) : on ne peut pas en recréer des
+// milliers pour revenir.
 
 const NOSTR_RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net", "wss://nostr.mom"];
 const PRESENCE_EVERY = 60 * 1000;
@@ -26,6 +28,8 @@ const PICK_WAIT = 3000; // temps laissé aux relais pour dire qui est déjà là
 const CHAT_LIMIT = 200;
 const TEXT_MAX = 500;
 const HELLO_KIND = 27235; // éphémère : jamais publié, sert seulement à signer la poignée de main
+const POW_BITS = 8; // bits à zéro exigés : ~256 essais de scrypt, une trentaine de secondes
+const EARLY_MAX = 20; // messages gardés de côté pendant la vérification d'une poignée de main
 
 // Anti-flood à la réception, par personne : au-delà, les messages sont ignorés, et une
 // personne qui insiste est mise en sourdine une minute
@@ -266,6 +270,28 @@ function discovered(room, { peer: peerId, inst }) {
   setupConn(room, room.sp.peer.connect(peerId, { serialization: "json", reliable: true, metadata: { room: room.key } }));
 }
 
+// --- Preuve de travail ---------------------------------------------------------------
+
+let powVerifier = null;
+let powSeq = 0;
+const powWaiting = new Map();
+const powOk = new Map(); // pubkey → nonce déjà vérifié
+
+// Nombre de bits à zéro de la preuve d'une identité (calcul dans un worker)
+function powBits(pubkey, nonce) {
+  if (powOk.get(pubkey) === nonce) return Promise.resolve(POW_BITS);
+  if (!powVerifier) {
+    powVerifier = new Worker("pow-worker.js");
+    powVerifier.onmessage = ({ data }) => {
+      powWaiting.get(data.req)?.(data.bits);
+      powWaiting.delete(data.req);
+    };
+  }
+  const req = ++powSeq;
+  powVerifier.postMessage({ t: "verify", req, pubkey, nonce });
+  return new Promise((resolve) => powWaiting.set(req, resolve));
+}
+
 // --- Connexions et poignée de main ----------------------------------------------------
 
 function safeSend(conn, msg) {
@@ -291,7 +317,7 @@ function setupConn(room, conn) {
       {
         kind: HELLO_KIND,
         created_at: nowSeconds(),
-        tags: [["from", room.sp.id], ["to", conn.peer], ["room", room.key], ["inst", String(room.inst)]],
+        tags: [["from", room.sp.id], ["to", conn.peer], ["room", room.key], ["inst", String(room.inst)], ["pow", String(identity.pow)]],
         content: "",
       },
       identity.secret
@@ -343,33 +369,55 @@ function cleanColor(color) {
 function onData(room, conn, msg) {
   if (rooms.get(room.key) !== room || !msg || typeof msg !== "object") return;
 
-  if (msg.t === "hello" && room.pending.get(conn.peer) === conn) {
+  if (msg.t === "hello" && room.pending.get(conn.peer) === conn && !conn.checking) {
     const id = verifyHello(room, conn, msg);
     if (!id || id === identity.pubkey || settings.blocked[id]) return conn.close();
-    room.pending.delete(conn.peer);
-    // Déjà connecté à cette personne (reconnexion) : la nouvelle connexion remplace l'ancienne
-    const old = room.members.get(id);
-    if (old) old.conn.close();
-    const m = {
-      id,
-      conn,
-      name: cleanName(msg.name),
-      color: cleanColor(msg.color),
-      chatTimes: [],
-      liveTimes: [],
-      metaTimes: [],
-      drops: [],
-      mutedUntil: 0,
-    };
-    room.members.set(id, m);
-    if (!old) systemMessage(room.chat, room.kind === "page" ? "sysJoinedPage" : "sysJoinedSite", m.name);
-    knownPeople.set(id, { name: m.name, color: m.color });
-    roomChanged(room);
+    const nonce = Number(msg.ev.tags.find((x) => x[0] === "pow")?.[1]);
+    if (!Number.isSafeInteger(nonce) || nonce < 0) return conn.close();
+    conn.checking = true;
+    powBits(id, nonce).then((bits) => {
+      if (bits < POW_BITS) return conn.close();
+      powOk.set(id, nonce);
+      if (rooms.get(room.key) === room && room.pending.get(conn.peer) === conn && conn.open) acceptMember(room, conn, id, msg);
+    });
     return;
   }
 
   const m = [...room.members.values()].find((x) => x.conn === conn);
-  if (!m) return;
+  if (!m) {
+    // L'autre nous a déjà acceptés et parle, nous vérifions encore sa preuve : on garde
+    if (conn.checking && (conn.early ??= []).length < EARLY_MAX) conn.early.push(msg);
+    return;
+  }
+  onMemberData(room, m, msg);
+}
+
+function acceptMember(room, conn, id, msg) {
+  room.pending.delete(conn.peer);
+  // Déjà connecté à cette personne (reconnexion) : la nouvelle connexion remplace l'ancienne
+  const old = room.members.get(id);
+  if (old) old.conn.close();
+  const m = {
+    id,
+    conn,
+    name: cleanName(msg.name),
+    color: cleanColor(msg.color),
+    chatTimes: [],
+    liveTimes: [],
+    metaTimes: [],
+    drops: [],
+    mutedUntil: 0,
+  };
+  room.members.set(id, m);
+  if (!old) systemMessage(room.chat, room.kind === "page" ? "sysJoinedPage" : "sysJoinedSite", m.name);
+  knownPeople.set(id, { name: m.name, color: m.color });
+  roomChanged(room);
+  for (const early of conn.early ?? []) onMemberData(room, m, early);
+  conn.early = null;
+}
+
+function onMemberData(room, m, msg) {
+  const { conn } = m;
   const now = Date.now();
   if (m.mutedUntil > now) return;
 

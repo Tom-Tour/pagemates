@@ -42,6 +42,10 @@ header { display: flex; align-items: center; gap: 6px; padding: 8px; border-bott
 .n { color: var(--muted); }
 .badge { background: var(--bad); color: #fff; border-radius: 8px; padding: 0 5px; font-size: 11px; }
 
+#mining { padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--active); }
+#mining p { margin: 0 0 6px; }
+#mining-title { font-weight: 600; }
+#mining-bar { width: 100%; }
 #off { padding: 16px 12px; }
 #off p { margin: 0 0 8px; }
 #off-title { font-weight: 600; }
