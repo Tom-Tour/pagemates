@@ -73,32 +73,62 @@ function openDm(id) {
   $("#text").focus();
 }
 
-// Bouton à confirmer d'un second clic (les fenêtres de confirmation ne marchent pas ici).
-// L'état « armé » est gardé hors du bouton : la liste est refaite à chaque message reçu,
-// et le premier clic ne doit pas être perdu pour autant.
-let armed = null; // { key, timer }
+// Fiche d'une personne (clic sur son nom) : message privé, dessins, blocage. Bloquer
+// demande une étape de plus, avec ses conséquences écrites : pas de blocage par mégarde.
+let person = null; // { id, confirm }
 
-function confirmButton(label, key, sure, onConfirm) {
-  const on = armed?.key === key;
-  const b = el("button", { textContent: on ? label + " ?" : label, title: sure });
-  b.classList.toggle("danger", on);
-  b.addEventListener("click", (e) => {
-    e.stopPropagation();
-    clearTimeout(armed?.timer);
-    if (armed?.key === key) {
-      armed = null;
-      return onConfirm();
-    }
-    armed = {
-      key,
-      timer: setTimeout(() => {
-        armed = null;
-        render();
-      }, 3000),
-    };
+function openPerson(id) {
+  person = { id, confirm: false };
+  render();
+}
+
+function closePerson() {
+  person = null;
+  render();
+}
+
+function renderPerson() {
+  const box = $("#person");
+  const known = [...(snap.page?.people ?? []), ...(snap.site?.people ?? []), ...snap.dms].find((p) => p.id === person?.id);
+  box.hidden = !known;
+  if (!known) return;
+  const close = el("button", { className: "small", textContent: "✕", title: t("close") });
+  close.addEventListener("click", closePerson);
+  const head = el("div", { className: "person-head" }, swatch(known.color), el("strong", { textContent: known.name }), el("span", { className: "grow" }), close);
+  if (person.confirm) {
+    const yes = el("button", { className: "danger", textContent: t("blockConfirm", known.name) });
+    yes.addEventListener("click", () => {
+      act("block", known.id);
+      if (dmWith === known.id) dmWith = null;
+      closePerson();
+    });
+    const no = el("button", { textContent: t("cancel") });
+    no.addEventListener("click", () => {
+      person.confirm = false;
+      render();
+    });
+    box.replaceChildren(
+      head,
+      el("p", { className: "person-warn", textContent: t("blockConfirmTitle", known.name) }),
+      el("p", { className: "muted", textContent: t("blockConfirmHelp") }),
+      el("div", { className: "person-actions" }, yes, no)
+    );
+    return;
+  }
+  const inkHidden = !!snap.settings.hiddenInk[known.id];
+  const dm = el("button", { textContent: "✉ " + t("sendDm") });
+  dm.addEventListener("click", () => {
+    person = null;
+    openDm(known.id);
+  });
+  const inkBtn = el("button", { textContent: "✏️ " + t(inkHidden ? "inkShow" : "inkHide") });
+  inkBtn.addEventListener("click", () => act("toggleInk", known.id));
+  const block = el("button", { className: "subtle-danger", textContent: "⛔ " + t("blockAsk") });
+  block.addEventListener("click", () => {
+    person.confirm = true;
     render();
   });
-  return b;
+  box.replaceChildren(head, el("div", { className: "person-actions" }, dm, inkBtn, block));
 }
 
 // --- Affichage ------------------------------------------------------------------------
@@ -170,6 +200,8 @@ function renderRoom(room, status) {
   const people = room?.people ?? [];
 
   renderWhere(room);
+  renderTools();
+  renderPerson();
   $("#people").hidden = isDm;
   $("#dm-list").hidden = !isDm;
   $("#status").hidden = isDm || status === "open";
@@ -191,7 +223,7 @@ function renderRoom(room, status) {
               swatch(d.color),
               el("span", { textContent: d.name }),
               d.unread ? el("span", { className: "badge", textContent: d.unread }) : null,
-              confirmButton("⛔", "block:" + d.id, t("blockSure", d.name), () => act("block", d.id))
+              more(d.id)
             );
             chip.style.cursor = "pointer";
             chip.addEventListener("click", () => {
@@ -331,6 +363,43 @@ $("#channel-go").addEventListener("submit", (e) => {
   switchInstance(n);
 });
 
+// Outils de dessin (onglet Page) : mode dessin, effacer nos dessins de la page
+let clearAsk = false;
+
+function renderTools() {
+  const box = $("#tools");
+  const ctx = snap.ctx;
+  box.hidden = tab !== "page" || !snap.page?.inst;
+  if (box.hidden) return;
+  const drawBtn = el("button", { className: ctx.drawMode ? "on" : "", textContent: t(ctx.drawMode ? "drawing" : "draw"), title: t("drawHint") });
+  drawBtn.addEventListener("click", async () => {
+    const error = await ask("drawMode", windowId, !ctx.drawMode);
+    showError(error ? t(error) : null);
+  });
+  const items = [drawBtn];
+  if (ctx.myInk && clearAsk) {
+    const yes = el("button", { className: "small danger", textContent: t("yes") });
+    yes.addEventListener("click", () => {
+      clearAsk = false;
+      act("clearInk", windowId);
+    });
+    const no = el("button", { className: "small", textContent: t("no") });
+    no.addEventListener("click", () => {
+      clearAsk = false;
+      render();
+    });
+    items.push(el("span", { className: "muted", textContent: t("clearInkSure", ctx.myInk) }), yes, no);
+  } else if (ctx.myInk) {
+    const clear = el("button", { className: "small", textContent: t("clearInk", ctx.myInk) });
+    clear.addEventListener("click", () => {
+      clearAsk = true;
+      render();
+    });
+    items.push(clear);
+  }
+  box.replaceChildren(...items);
+}
+
 async function switchInstance(n) {
   const error = await ask("setInstance", windowId, tab, n);
   showError(error ? t(error) : null);
@@ -342,13 +411,22 @@ function swatch(color) {
   return s;
 }
 
+// Bouton « ⋯ » : ouvre la fiche de la personne
+function more(id) {
+  const b = el("button", { textContent: "⋯", title: t("personMenu") });
+  b.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openPerson(id);
+  });
+  return b;
+}
+
 function personChip(p) {
-  const chip = el("span", { className: "person" }, swatch(p.color), el("span", { textContent: p.name }));
+  const chip = el("button", { className: "person" + (person?.id === p.id ? " selected" : ""), title: t("personMenu") }, swatch(p.color), el("span", { textContent: p.name }));
+  chip.addEventListener("click", () => (person?.id === p.id ? closePerson() : openPerson(p.id)));
+  if (p.inkHidden) chip.append(el("span", { className: "tag muted", textContent: "· " + t("inkHiddenTag") }));
   if (tab === "site" && p.here) chip.append(el("span", { className: "tag muted", textContent: "· " + t("onPage") }));
   if (p.muted) chip.append(el("span", { className: "tag muted", textContent: "· " + t("mutedFlood") }));
-  const dm = el("button", { textContent: "✉", title: t("sendDm") });
-  dm.addEventListener("click", () => openDm(p.id));
-  chip.append(dm, confirmButton("⛔", "block:" + p.id, t("blockSure", p.name), () => act("block", p.id)));
   return chip;
 }
 
@@ -359,8 +437,8 @@ function chatLine(m) {
   const who = el("span", { className: "who" + (me ? " me" : ""), textContent: me ? t("you") : m.name });
   who.style.color = m.color;
   if (!me) {
-    who.title = t("sendDm");
-    who.addEventListener("click", () => openDm(m.from));
+    who.title = t("personMenu");
+    who.addEventListener("click", () => openPerson(m.from));
   }
   return el("li", {}, time, who, " ", m.text);
 }

@@ -51,9 +51,19 @@ header { display: flex; align-items: center; gap: 6px; padding: 8px; border-bott
 #off-title { font-weight: 600; }
 
 #room { flex: 1; display: flex; flex-direction: column; min-height: 0; border-top: 1px solid var(--border); }
+#room > :not(#chat) { flex: none; } /* seul le chat rétrécit quand la place manque */
 #people, #dm-list { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--border); max-height: 30%; overflow-y: auto; }
+#tools { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px 8px 0; }
+#person { padding: 8px; border-bottom: 1px solid var(--border); background: var(--active); }
+#person p { margin: 6px 0; }
+.person-head { display: flex; align-items: center; gap: 6px; }
+.person-head .swatch { width: 10px; height: 10px; border-radius: 50%; }
+.person-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.person-warn { font-weight: 600; }
+button.subtle-danger { color: var(--bad); }
 .person { display: inline-flex; align-items: center; gap: 4px; padding: 1px 4px 1px 6px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); }
 .person.selected { border-color: var(--accent); background: var(--active); }
+button.person { font: inherit; color: var(--fg); cursor: pointer; }
 .person.away { opacity: .6; }
 .person .swatch { width: 8px; height: 8px; border-radius: 50%; }
 .person button { border: 0; background: none; padding: 0 2px; }

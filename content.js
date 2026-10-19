@@ -9,6 +9,9 @@
 // Le surlignage est envoyé comme citation (texte + quelques caractères avant et après),
 // à la manière des annotations web : ça résiste aux différences de mise en page.
 //
+// Les dessins s'accrochent de la même façon : le trait part d'un élément, ses points sont
+// relatifs à ce point de départ (en pixels, pour garder la forme du dessin).
+//
 // Le contenu des champs de saisie n'est jamais lu ni envoyé.
 
 (() => {
@@ -16,8 +19,10 @@
   window.__pagemates = true;
 
   const port = browser.runtime.connect({ name: "page" });
-  let config = { showCursors: true, shareCursor: true, shareSelection: true };
-  let peers = new Map(); // id → { name, color, cur, curAt, click, sel }
+  let config = { showCursors: true, shareCursor: true, shareSelection: true, color: "#888888" };
+  let peers = new Map(); // id → { name, color, ink, cur, curAt, curCache, selRange, strokes }
+  const mine = new Map(); // nos traits sur cette page : id → trait
+  let drawMode = false;
   let lastUrl = "";
   let lastSel = ""; // dernier surlignage envoyé
 
@@ -138,7 +143,7 @@
   addEventListener(
     "pointermove",
     (e) => {
-      if (!sharing() || e.pointerType === "touch") return;
+      if (!sharing() || drawMode || e.pointerType === "touch") return;
       const el = targetAt(e);
       if (!el) return;
       pending = anchorFor(el, e.clientX, e.clientY);
@@ -306,8 +311,15 @@
     return d;
   }
 
+  let ink = null; // <svg> des dessins, sous les curseurs
+  let capture = null; // surface qui reçoit la souris en mode dessin
+  let hintBox = null;
+
   function ensureLayer() {
-    if (host?.isConnected) return;
+    if (host) {
+      if (!host.isConnected) document.documentElement.appendChild(host); // page réécrite par le site
+      return;
+    }
     host = document.createElement("pagemates-layer");
     css(host, {
       all: "initial",
@@ -320,8 +332,27 @@
     });
     const shadow = host.attachShadow({ mode: "closed" });
     layer = div({ position: "absolute", inset: "0", font: "12px/1.3 system-ui, sans-serif" }, shadow);
+    ink = document.createElementNS(SVG, "svg");
+    css(ink, { position: "absolute", inset: "0", width: "100%", height: "100%", overflow: "visible" });
+    layer.appendChild(ink);
+    capture = div({ position: "absolute", inset: "0", display: "none", cursor: "crosshair", "pointer-events": "auto", "touch-action": "none" });
+    hintBox = div({
+      position: "absolute",
+      top: "8px",
+      left: "50%",
+      transform: "translateX(-50%)",
+      padding: "4px 10px",
+      "border-radius": "12px",
+      background: "rgba(20,20,26,.85)",
+      color: "white",
+      display: "none",
+      "white-space": "nowrap",
+    });
+    setupCapture();
     document.documentElement.appendChild(host);
   }
+
+  const SVG = "http://www.w3.org/2000/svg";
 
   function makeCursor(peer) {
     const box = div({ position: "absolute", left: "0", top: "0", "will-change": "transform", display: "none" });
@@ -378,13 +409,24 @@
   const IDLE_FADE = 20000;
   let frame = 0;
 
+  function inkCount() {
+    let n = mine.size;
+    for (const peer of peers.values()) n += peer.strokes.size;
+    return n;
+  }
+
+  function needsFrame() {
+    return (config.showCursors && peers.size > 0) || inkCount() > 0 || drawMode;
+  }
+
   function draw() {
     frame = 0;
-    if (!config.showCursors || !peers.size) return;
-    if (host && !host.isConnected) document.documentElement.appendChild(host); // page réécrite par le site
+    if (!needsFrame()) return;
+    ensureLayer();
     const W = innerWidth;
     const H = innerHeight;
     const now = Date.now();
+    drawInk();
     for (const peer of peers.values()) {
       if (!peer.ui) continue;
       const { box, arrow, label } = peer.ui;
@@ -430,8 +472,152 @@
   }
 
   function schedule() {
-    if (!frame && config.showCursors && peers.size) frame = requestAnimationFrame(draw);
+    if (!frame && needsFrame()) frame = requestAnimationFrame(draw);
   }
+
+  // --- Dessins ------------------------------------------------------------------------
+
+  const STROKE_POINTS = 2000; // points par trait
+  const PEER_STROKES = 300; // traits gardés par personne et par page
+  const PEER_POINTS = 30000;
+  const INK_EVERY = 80; // ms entre deux envois d'un trait en cours
+
+  // Un trait : { id, a (ancrage du départ), pts: [[dx, dy]…], cache, g, path }
+  function addStroke(store, data, color) {
+    ensureLayer();
+    const g = document.createElementNS(SVG, "g");
+    const path = document.createElementNS(SVG, "path");
+    for (const [k, v] of Object.entries({ fill: "none", "stroke-width": "3", "stroke-linecap": "round", "stroke-linejoin": "round" })) {
+      path.setAttribute(k, v);
+    }
+    path.setAttribute("stroke", color);
+    g.appendChild(path);
+    ink.appendChild(g);
+    const stroke = { id: data.id, a: data.a, pts: [], cache: {}, g, path };
+    store.set(data.id, stroke);
+    appendPoints(stroke, data.pts);
+    return stroke;
+  }
+
+  function appendPoints(stroke, pts) {
+    for (const p of pts) if (stroke.pts.length < STROKE_POINTS) stroke.pts.push(p);
+    stroke.path.setAttribute("d", stroke.pts.length ? "M" + stroke.pts.map(([x, y]) => `${x} ${y}`).join(" L") : "");
+  }
+
+  function removeStroke(store, id) {
+    store.get(id)?.g.remove();
+    store.delete(id);
+  }
+
+  function clearStrokes(store) {
+    for (const stroke of store.values()) stroke.g.remove();
+    store.clear();
+  }
+
+  function pointCount(store) {
+    let n = 0;
+    for (const stroke of store.values()) n += stroke.pts.length;
+    return n;
+  }
+
+  function drawInk() {
+    const strokes = [[mine, true]];
+    for (const peer of peers.values()) strokes.push([peer.strokes, peer.ink]);
+    for (const [store, visible] of strokes) {
+      for (const stroke of store.values()) {
+        if (!visible) {
+          stroke.g.setAttribute("display", "none");
+          continue;
+        }
+        const p = place(stroke.a, stroke.cache);
+        stroke.g.removeAttribute("display");
+        stroke.g.setAttribute("transform", `translate(${p.x} ${p.y})`);
+        stroke.g.setAttribute("opacity", p.exact ? "0.9" : "0.45");
+      }
+    }
+  }
+
+  // Élément sous un point de l'écran, en passant à travers notre calque
+  function elementAt(x, y) {
+    return document.elementsFromPoint(x, y).find((el) => el !== host && el !== document.documentElement) ?? document.body;
+  }
+
+  let current = null; // trait en cours
+  let unsent = [];
+  let inkTimer = null;
+
+  function flushInk(done) {
+    clearTimeout(inkTimer);
+    inkTimer = null;
+    if (!current) return;
+    port.postMessage({ t: "draw", s: { id: current.id, pts: unsent, done } });
+    unsent = [];
+    if (done) current = null;
+  }
+
+  function setupCapture() {
+    capture.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      capture.setPointerCapture(e.pointerId);
+      const el = elementAt(e.clientX, e.clientY);
+      const a = anchorFor(el, e.clientX, e.clientY);
+      const id = Math.random().toString(36).slice(2, 12);
+      current = addStroke(mine, { id, a, pts: [[0, 0]] }, config.color);
+      port.postMessage({ t: "draw", s: { id, a, pts: [[0, 0]], done: false } });
+      schedule();
+    });
+    capture.addEventListener("pointermove", (e) => {
+      if (!current || current.pts.length >= STROKE_POINTS) return;
+      // Relatif au point de départ tel qu'il est maintenant : on peut défiler en dessinant
+      const o = place(current.a, current.cache);
+      const p = [Math.round(e.clientX - o.x), Math.round(e.clientY - o.y)];
+      const last = current.pts.at(-1);
+      if (Math.abs(p[0] - last[0]) + Math.abs(p[1] - last[1]) < 3) return;
+      appendPoints(current, [p]);
+      unsent.push(p);
+      inkTimer ??= setTimeout(() => flushInk(false), INK_EVERY);
+    });
+    const end = () => current && flushInk(true);
+    capture.addEventListener("pointerup", end);
+    capture.addEventListener("pointercancel", end);
+  }
+
+  function setDrawMode(on, hint = "") {
+    drawMode = on;
+    ensureLayer();
+    css(capture, { display: on ? "block" : "none" });
+    css(hintBox, { display: on ? "block" : "none" });
+    hintBox.textContent = hint;
+    if (on) {
+      layer.appendChild(capture);
+      layer.appendChild(hintBox);
+      hideCursor();
+    } else if (current) {
+      flushInk(true);
+    }
+    schedule();
+  }
+
+  addEventListener(
+    "keydown",
+    (e) => {
+      if (!drawMode) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setDrawMode(false);
+        port.postMessage({ t: "drawMode", on: false });
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+        // Annuler notre dernier trait
+        e.preventDefault();
+        const last = [...mine.keys()].at(-1);
+        if (!last) return;
+        removeStroke(mine, last);
+        port.postMessage({ t: "undraw", id: last });
+      }
+    },
+    true
+  );
 
   function showClick(peer, a) {
     if (!config.showCursors) return;
@@ -476,12 +662,18 @@
     peer.ui = null;
   }
 
+  function forgetPeer(peer) {
+    clearPeer(peer);
+    clearStrokes(peer.strokes);
+  }
+
   // --- Messages du moteur ----------------------------------------------------------
 
   port.onMessage.addListener((msg) => {
     switch (msg.t) {
       case "config": {
         config = msg.config;
+        for (const stroke of mine.values()) stroke.path.setAttribute("stroke", config.color);
         if (!config.shareSelection && lastSel) {
           lastSel = "";
           port.postMessage({ t: "sel", q: null });
@@ -496,10 +688,12 @@
       }
       case "peers": {
         const next = new Map();
-        for (const { id, name, color } of msg.list) {
-          const peer = peers.get(id) ?? { cur: null, curAt: 0, curCache: {}, selRange: null };
+        for (const { id, name, color, ink } of msg.list) {
+          const peer = peers.get(id) ?? { cur: null, curAt: 0, curCache: {}, selRange: null, strokes: new Map() };
           peer.name = name;
           peer.color = color;
+          peer.ink = ink;
+          for (const stroke of peer.strokes.values()) stroke.path.setAttribute("stroke", color);
           next.set(id, peer);
           if (config.showCursors) {
             ensureLayer();
@@ -507,12 +701,11 @@
             else paintPeer(peer);
           }
         }
-        for (const [id, peer] of peers) if (!next.has(id)) clearPeer(peer);
+        for (const [id, peer] of peers) if (!next.has(id)) forgetPeer(peer);
         const arrived = [...next.keys()].some((id) => !peers.has(id));
         peers = next;
         // Quelqu'un vient d'arriver : on lui montre notre surlignage en cours
         if (arrived) resendSelection();
-        if (!peers.size) host?.remove();
         schedule();
         break;
       }
@@ -537,6 +730,55 @@
         schedule();
         break;
       }
+      // Nos dessins gardés pour cette page
+      case "mine": {
+        clearStrokes(mine);
+        for (const s of msg.list) addStroke(mine, s, config.color);
+        schedule();
+        break;
+      }
+      // Un trait d'une autre personne : début (avec ancrage) ou suite
+      case "draw": {
+        const peer = peers.get(msg.id);
+        if (!peer) return;
+        const old = peer.strokes.get(msg.s.id);
+        if (old) {
+          if (pointCount(peer.strokes) + msg.s.pts.length <= PEER_POINTS) appendPoints(old, msg.s.pts);
+        } else if (msg.s.a && peer.strokes.size < PEER_STROKES && pointCount(peer.strokes) + msg.s.pts.length <= PEER_POINTS) {
+          addStroke(peer.strokes, msg.s, peer.color);
+        }
+        schedule();
+        break;
+      }
+      // Tous les dessins d'une personne, envoyés quand on la rejoint sur la page
+      case "drawings": {
+        const peer = peers.get(msg.id);
+        if (!peer) return;
+        clearStrokes(peer.strokes);
+        let points = 0;
+        for (const s of msg.list.slice(-PEER_STROKES)) {
+          points += s.pts.length;
+          if (points > PEER_POINTS) break;
+          addStroke(peer.strokes, s, peer.color);
+        }
+        schedule();
+        break;
+      }
+      case "undraw": {
+        const peer = peers.get(msg.id);
+        if (!peer) return;
+        if (msg.all) clearStrokes(peer.strokes);
+        else removeStroke(peer.strokes, msg.sid);
+        schedule();
+        break;
+      }
+      case "drawMode":
+        setDrawMode(msg.on, msg.hint);
+        break;
+      case "clearMine":
+        clearStrokes(mine);
+        schedule();
+        break;
     }
   });
 })();

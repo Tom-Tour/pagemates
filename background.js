@@ -17,6 +17,7 @@ const DEFAULTS = {
   sites: {}, // site → true (toujours rejoindre) | false (jamais)
   blocked: {}, // pubkey → dernier nom connu
   pageRules: {}, // site → { depth, params: { nom: true | false } } : ce qui définit le salon de page
+  hiddenInk: {}, // pubkey → true : personnes dont on masque les dessins
 };
 
 let settings = { ...DEFAULTS };
@@ -87,6 +88,75 @@ function tabsOnPage(pageKey) {
   return [...tabs.values()].filter((tab) => tab.pageKey === pageKey && rooms.has(pageKey));
 }
 
+// --- Nos dessins ------------------------------------------------------------------------
+
+// pageKey → Map(id → { id, a, pts }) : gardés d'une session à l'autre, renvoyés à qui
+// arrive sur la page. Les pages les plus anciennement dessinées sont oubliées en premier.
+let myInk = new Map();
+const INK_PAGES = 200;
+const INK_STROKES = 300; // par page
+const INK_POINTS = 30000; // par page
+let inkSaveTimer = null;
+
+function inkFor(pageKey) {
+  return [...(myInk.get(pageKey)?.values() ?? [])].map(({ id, a, pts }) => ({ id, a, pts }));
+}
+
+function saveInk() {
+  clearTimeout(inkSaveTimer);
+  inkSaveTimer = setTimeout(() => {
+    browser.storage.local.set({ ink: Object.fromEntries([...myInk].map(([k, m]) => [k, [...m.values()]])) });
+  }, 1000);
+}
+
+// Début (avec ancrage) ou suite d'un de nos traits → false si refusé
+function recordInk(pageKey, stroke) {
+  let page = myInk.get(pageKey);
+  if (page) myInk.delete(pageKey); // remise en fin de liste : page dessinée récemment
+  else page = new Map();
+  myInk.set(pageKey, page);
+  while (myInk.size > INK_PAGES) myInk.delete(myInk.keys().next().value);
+  const old = page.get(stroke.id);
+  if (old) {
+    if (old.pts.length + stroke.pts.length > 2000) return false;
+    old.pts.push(...stroke.pts);
+  } else {
+    if (!stroke.a) return false;
+    page.set(stroke.id, { id: stroke.id, a: stroke.a, pts: stroke.pts });
+  }
+  // Trop de dessins sur la page : les plus anciens traits partent
+  let points = 0;
+  for (const st of page.values()) points += st.pts.length;
+  while (page.size > INK_STROKES || points > INK_POINTS) {
+    const first = page.values().next().value;
+    points -= first.pts.length;
+    page.delete(first.id);
+  }
+  saveInk();
+  if (!old) update(); // nouveau trait : le nombre de dessins change dans la barre latérale
+  return true;
+}
+
+// id null = tous nos dessins de la page
+function removeInk(pageKey, id) {
+  const page = myInk.get(pageKey);
+  if (!page) return;
+  if (id == null) page.clear();
+  else page.delete(id);
+  if (!page.size) myInk.delete(pageKey);
+  saveInk();
+  update();
+}
+
+// Nos dessins de la page de cet onglet → script de la page (seulement si le site est rejoint)
+function pushMine(tab) {
+  const on = siteEnabled(tab.site) && !tab.incognito;
+  const key = `${tab.pageKey}|${on}`;
+  if (key === tab.lastMine) return;
+  tab.lastMine = key;
+  tab.port.postMessage({ t: "mine", list: on ? inkFor(tab.pageKey) : [] });
+}
+
 // --- Salons voulus ↔ salons ouverts --------------------------------------------------
 
 const GRACE = 8000; // un rechargement de page ne doit pas faire quitter le salon
@@ -135,15 +205,26 @@ function reconcile() {
       );
   }
   leftPages.clear();
-  for (const tab of tabs.values()) pushPeers(tab);
+  for (const tab of tabs.values()) {
+    pushPeers(tab);
+    pushMine(tab);
+    // Plus de salon de page : plus de mode dessin
+    if (tab.drawMode && !rooms.has(tab.pageKey)) setDrawMode(tab, false);
+  }
   update();
 }
 
 // --- Pages (scripts injectés) ----------------------------------------------------------
 
 function contentConfig() {
-  const { showCursors, shareCursor, shareSelection } = settings;
-  return { t: "config", config: { showCursors, shareCursor, shareSelection } };
+  const { showCursors, shareCursor, shareSelection, color } = settings;
+  return { t: "config", config: { showCursors, shareCursor, shareSelection, color } };
+}
+
+function setDrawMode(tab, on) {
+  tab.drawMode = on;
+  tab.port.postMessage({ t: "drawMode", on, hint: t("drawHint") });
+  update();
 }
 
 function connectPage(port) {
@@ -164,7 +245,13 @@ function connectPage(port) {
   port.postMessage(contentConfig());
   port.onMessage.addListener((msg) => {
     if (msg.t === "url") applyUrl(tab, msg.url);
-    else if (msg.t === "cur" || msg.t === "click" || msg.t === "sel") {
+    else if (msg.t === "drawMode") {
+      // Échap dans la page
+      tab.drawMode = false;
+      update();
+    } else if (msg.t === "draw" || msg.t === "undraw") {
+      if (tabs.get(tab.id) === tab) relayLive(tab, msg);
+    } else if (msg.t === "cur" || msg.t === "click" || msg.t === "sel") {
       if (tabs.get(tab.id) === tab) relayLive(tab, msg);
     }
   });
@@ -183,7 +270,8 @@ async function applyUrl(tab, url) {
   if (tab.url !== url) return; // l'adresse a encore changé entre-temps
   const previous = lastPageOfTab.get(tab.id);
   if (previous && previous !== keys[1]) leftPages.add(previous);
-  Object.assign(tab, { site: n?.site ?? "", siteKey: keys[0], pageKey: keys[1], parts: n?.parts ?? null, lastPeers: "" });
+  if (tab.drawMode && previous !== keys[1]) setDrawMode(tab, false);
+  Object.assign(tab, { site: n?.site ?? "", siteKey: keys[0], pageKey: keys[1], parts: n?.parts ?? null, lastPeers: "", lastMine: "" });
   tabs.set(tab.id, tab);
   lastPageOfTab.set(tab.id, tab.pageKey);
   reconcile();
@@ -203,7 +291,7 @@ function setPageRule(site, change) {
 // Personnes présentes sur la page de cet onglet → script de la page et badge du bouton
 function pushPeers(tab) {
   const room = rooms.get(tab.pageKey);
-  const list = room ? [...room.members.values()].map(({ id, name, color }) => ({ id, name, color })) : [];
+  const list = room ? [...room.members.values()].map(({ id, name, color }) => ({ id, name, color, ink: !settings.hiddenInk[id] })) : [];
   const json = JSON.stringify(list);
   if (json === tab.lastPeers) return;
   tab.lastPeers = json;
@@ -235,6 +323,7 @@ function roomInfo(room, here = null) {
       color: m.color,
       here: here ? here.members.has(m.id) : true,
       muted: m.mutedUntil > now,
+      inkHidden: !!settings.hiddenInk[m.id],
     })),
     chat: room.chat.filter((m) => !settings.blocked[m.from]), // ce qu'une personne bloquée a écrit disparaît aussi
   };
@@ -250,7 +339,16 @@ function snapshot(windowId) {
     instanceSize: INSTANCE_SIZE,
     sendRate: SEND_PER_SECOND,
     mining: mining && { tries: mining.tries, expected: 2 ** POW_BITS },
-    ctx: tab?.site ? { site: tab.site, parts: tab.parts, enabled: siteEnabled(tab.site), incognito: tab.incognito } : null,
+    ctx: tab?.site
+      ? {
+          site: tab.site,
+          parts: tab.parts,
+          enabled: siteEnabled(tab.site),
+          incognito: tab.incognito,
+          drawMode: !!tab.drawMode,
+          myInk: myInk.get(tab.pageKey)?.size ?? 0,
+        }
+      : null,
     page: roomInfo(pageRoom),
     site: roomInfo(tab && rooms.get(tab.siteKey), pageRoom ?? { members: new Map() }),
     dms: [...dms].map(([id, th]) => ({
@@ -268,7 +366,7 @@ function snapshot(windowId) {
 function cleanSettings(patch) {
   const out = {};
   for (const [k, v] of Object.entries(patch)) {
-    if (!(k in DEFAULTS) || k === "blocked" || k === "pageRules") continue;
+    if (!(k in DEFAULTS) || k === "blocked" || k === "pageRules" || k === "hiddenInk") continue;
     if (k === "name") out.name = cleanName(v);
     else if (k === "color") out.color = cleanColor(v);
     else if (k === "view") out.view = ["both", "page", "site"].includes(v) ? v : "both";
@@ -290,7 +388,7 @@ const commands = {
     saveSettings();
     setLang(settings.lang);
     if (settings.name !== before.name || settings.color !== before.color) broadcastProfile();
-    if (["showCursors", "shareCursor", "shareSelection"].some((k) => settings[k] !== before[k])) {
+    if (["showCursors", "shareCursor", "shareSelection", "color"].some((k) => settings[k] !== before[k])) {
       for (const tab of tabs.values()) tab.port.postMessage(contentConfig());
     }
     reconcile();
@@ -332,6 +430,28 @@ const commands = {
       delete rule.depth;
       rule.params = {};
     });
+  },
+  // Mode dessin de l'onglet actif (seulement dans un salon de page ouvert)
+  drawMode(windowId, on) {
+    const tab = tabs.get(activeTab.get(windowId));
+    if (!tab || !rooms.has(tab.pageKey)) return "errNotConnected";
+    setDrawMode(tab, !!on);
+    return null;
+  },
+  clearInk(windowId) {
+    const tab = tabs.get(activeTab.get(windowId));
+    if (!tab) return;
+    clearAllInk(tab);
+    tab.port.postMessage({ t: "clearMine" });
+  },
+  // Afficher / masquer les dessins d'une personne (retenu)
+  toggleInk(id) {
+    if (typeof id !== "string" || !/^[0-9a-f]{64}$/.test(id)) return;
+    const { [id]: hidden, ...rest } = settings.hiddenInk;
+    settings.hiddenInk = hidden ? rest : { ...rest, [id]: true };
+    saveSettings();
+    for (const tab of tabs.values()) pushPeers(tab);
+    update();
   },
   // Passer dans une autre instance du salon de page ou de site (n, ou "new")
   setInstance(windowId, kind, n) {
@@ -434,7 +554,10 @@ function mineIdentity() {
 }
 
 async function init() {
-  const stored = await browser.storage.local.get(["settings", "identity", "pow"]);
+  const stored = await browser.storage.local.get(["settings", "identity", "pow", "ink"]);
+  for (const [pageKey, list] of Object.entries(stored.ink ?? {})) {
+    if (Array.isArray(list) && list.length) myInk.set(pageKey, new Map(list.map((st) => [st.id, st])));
+  }
   settings = { ...DEFAULTS, ...stored.settings };
   // Anciens réglages d'anti-flood (0.1 à 0.3) : les limites sont désormais fixes
   delete settings.sendRate;

@@ -2,7 +2,10 @@
 //
 // Les personnes d'un salon sont reliées en pair-à-pair (PeerJS : son serveur public ne
 // sert qu'à mettre les navigateurs en relation). Le salon de page porte le chat de page,
-// les curseurs et les surlignages ; le salon de site, le chat du site.
+// les curseurs, les surlignages et les dessins ; le salon de site, le chat du site.
+//
+// Dessins : chacun garde les siens (background.js) et les envoie à qui arrive sur la
+// page. Personne ne retransmet ceux des autres : sans leur auteur, ils ne s'affichent pas.
 //
 // Instances : comme dans un jeu en ligne, un salon ne dépasse pas INSTANCE_SIZE personnes.
 // Au-delà, les nouveaux arrivants ouvrent l'instance suivante (#2, #3…), et chacun peut
@@ -416,6 +419,10 @@ function acceptMember(room, conn, id, msg) {
   if (!old) systemMessage(room.chat, room.kind === "page" ? "sysJoinedPage" : "sysJoinedSite", m.name);
   knownPeople.set(id, { name: m.name, color: m.color });
   roomChanged(room);
+  if (room.kind === "page") {
+    const list = inkFor(room.key);
+    if (list.length) safeSend(conn, { t: "drawings", list });
+  }
   for (const early of conn.early ?? []) onMemberData(room, m, early);
   conn.early = null;
 }
@@ -425,7 +432,7 @@ function onMemberData(room, m, msg) {
   const now = Date.now();
   if (m.mutedUntil > now) return;
 
-  const live = msg.t === "cur" || msg.t === "click" || msg.t === "sel";
+  const live = ["cur", "click", "sel", "draw", "undraw"].includes(msg.t);
   const chatty = msg.t === "chat" || msg.t === "dm";
   const ok = live
     ? rateOk(m.liveTimes, LIVE_PER_SECOND, now)
@@ -465,6 +472,23 @@ function onMemberData(room, m, msg) {
       for (const tab of tabsOnPage(room.key)) {
         tab.port.postMessage(msg.t === "sel" ? { t: "sel", id: m.id, q: payload } : { t: msg.t, id: m.id, a: payload });
       }
+      break;
+    }
+    case "draw": {
+      const stroke = room.kind === "page" && cleanStroke(msg.s, CHUNK_POINTS);
+      if (!stroke) return;
+      for (const tab of tabsOnPage(room.key)) tab.port.postMessage({ t: "draw", id: m.id, s: stroke });
+      break;
+    }
+    case "undraw": {
+      if (room.kind !== "page" || (!msg.all && !STROKE_ID.test(msg.sid))) return;
+      for (const tab of tabsOnPage(room.key)) tab.port.postMessage({ t: "undraw", id: m.id, sid: msg.sid, all: !!msg.all });
+      break;
+    }
+    case "drawings": {
+      if (room.kind !== "page" || !Array.isArray(msg.list)) return;
+      const list = msg.list.slice(-300).map((x) => cleanStroke(x, STROKE_POINTS)).filter((x) => x?.a);
+      for (const tab of tabsOnPage(room.key)) tab.port.postMessage({ t: "drawings", id: m.id, list });
       break;
     }
     case "bye":
@@ -512,6 +536,22 @@ function cleanAnchor(a) {
     fx: num01(a.fx),
     fy: num01(a.fy),
   };
+}
+
+const STROKE_ID = /^[a-z0-9]{1,16}$/;
+const STROKE_POINTS = 2000; // points par trait
+const CHUNK_POINTS = 500; // points par morceau envoyé pendant le dessin
+const coord = (v) => Number.isInteger(v) && Math.abs(v) <= 20000;
+
+// Trait (ou morceau de trait) → copie propre, ou null. L'ancrage n'est là qu'au début.
+function cleanStroke(x, maxPoints) {
+  if (!x || typeof x !== "object" || !STROKE_ID.test(x.id) || !Array.isArray(x.pts) || x.pts.length > maxPoints) return null;
+  if (!x.pts.every((p) => Array.isArray(p) && p.length === 2 && coord(p[0]) && coord(p[1]))) return null;
+  const a = x.a == null ? null : cleanAnchor(x.a);
+  if (a === undefined) return null;
+  const out = { id: x.id, pts: x.pts.map(([px, py]) => [px, py]), done: !!x.done };
+  if (a) out.a = a;
+  return out;
 }
 
 function cleanQuote(q) {
@@ -595,12 +635,32 @@ function sendDm(id, text) {
 function relayLive(tab, msg) {
   const room = rooms.get(tab.pageKey);
   if (!room) return;
+  if (msg.t === "draw" || msg.t === "undraw") return relayInk(tab, room, msg);
   if (msg.t === "sel" ? !settings.shareSelection : !settings.shareCursor) return;
   if (!rateOk(tab.liveTimes, LIVE_PER_SECOND / 2)) return;
   const payload = msg.t === "sel" ? (msg.q == null ? null : cleanQuote(msg.q)) : msg.a == null ? null : cleanAnchor(msg.a);
   if (payload === undefined) return;
   const out = msg.t === "sel" ? { t: "sel", q: payload } : { t: msg.t, a: payload };
   for (const m of room.members.values()) safeSend(m.conn, out);
+}
+
+// Nos dessins : gardés (background.js) puis envoyés aux personnes de la page
+function relayInk(tab, room, msg) {
+  if (msg.t === "undraw") {
+    if (!STROKE_ID.test(msg.id)) return;
+    removeInk(tab.pageKey, msg.id);
+    for (const m of room.members.values()) safeSend(m.conn, { t: "undraw", sid: msg.id });
+    return;
+  }
+  const stroke = cleanStroke(msg.s, CHUNK_POINTS);
+  if (!stroke || !recordInk(tab.pageKey, stroke)) return;
+  for (const m of room.members.values()) safeSend(m.conn, { t: "draw", s: stroke });
+}
+
+function clearAllInk(tab) {
+  removeInk(tab.pageKey, null);
+  const room = rooms.get(tab.pageKey);
+  for (const m of room?.members.values() ?? []) safeSend(m.conn, { t: "undraw", all: true });
 }
 
 // --- Diffusion de nos changements --------------------------------------------------
