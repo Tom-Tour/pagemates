@@ -130,9 +130,9 @@ function render() {
   const status = inRoom ? room?.status ?? "connecting" : "off";
   $("#dot").className = status;
   $("#site").textContent = ctx?.site ?? "Pagemates";
+  // Les nombres de personnes sont dans les onglets
   const here = snap.page?.people.length ?? 0;
   const onSite = snap.site?.people.length;
-  $("#count").textContent = inRoom ? `· ${t("hereCount", here)}` + (onSite == null ? "" : ` · ${t("siteCount", onSite)}`) : "";
   $("#n-page").textContent = inRoom ? here : "";
   $("#n-site").textContent = inRoom && onSite != null ? onSite : "";
   $("#leave").hidden = !inRoom;

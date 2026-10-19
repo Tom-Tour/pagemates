@@ -31,14 +31,14 @@ button.small { padding: 1px 6px; font-size: 12px; }
 #main { display: flex; flex-direction: column; height: 100%; }
 header { display: flex; align-items: center; gap: 6px; padding: 8px; border-bottom: 1px solid var(--border); }
 #site { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#count { white-space: nowrap; }
 #dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
 #dot.open { background: #46a758; }
 #dot.connecting { background: #ffb224; }
 #dot.error { background: var(--bad); }
 
 #tabs { display: flex; gap: 4px; padding: 6px 8px 0; }
-#tabs button { flex: 1; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+#tabs button { flex: 1 1 auto; white-space: nowrap; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+#leave { white-space: nowrap; }
 .n { color: var(--muted); }
 .badge { background: var(--bad); color: #fff; border-radius: 8px; padding: 0 5px; font-size: 11px; }
 
