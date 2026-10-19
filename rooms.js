@@ -31,7 +31,8 @@ const PICK_WAIT = 3000; // temps laissé aux relais pour dire qui est déjà là
 const CHAT_LIMIT = 200;
 const TEXT_MAX = 500;
 const HELLO_KIND = 27235; // éphémère : jamais publié, sert seulement à signer la poignée de main
-const POW_BITS = 8; // bits à zéro exigés : ~256 essais de scrypt, une trentaine de secondes
+const POW_BITS = 7; // bits à zéro exigés : ~128 essais de scrypt, une vingtaine de secondes
+const POW_VERSION = 2; // change avec les réglages de pow-worker.js : les anciennes preuves sont recalculées
 const EARLY_MAX = 20; // messages gardés de côté pendant la vérification d'une poignée de main
 
 // Anti-flood. Les limites sont fixes et identiques pour tous : la réception tolère un peu
@@ -282,15 +283,16 @@ function discovered(room, { peer: peerId, inst }) {
 let powVerifier = null;
 let powSeq = 0;
 const powWaiting = new Map();
-const powOk = new Map(); // pubkey → nonce déjà vérifié
+const powOk = new Map(); // pubkey → { nonce, code } déjà vérifiés
 
-// Nombre de bits à zéro de la preuve d'une identité (calcul dans un worker)
-function powBits(pubkey, nonce) {
-  if (powOk.get(pubkey) === nonce) return Promise.resolve(POW_BITS);
+// Preuve d'une identité → { bits (à zéro), code (affiché à côté du nom) }, calcul dans un worker
+function powCheck(pubkey, nonce) {
+  const known = powOk.get(pubkey);
+  if (known?.nonce === nonce) return Promise.resolve({ bits: POW_BITS, code: known.code });
   if (!powVerifier) {
     powVerifier = new Worker("pow-worker.js");
     powVerifier.onmessage = ({ data }) => {
-      powWaiting.get(data.req)?.(data.bits);
+      powWaiting.get(data.req)?.({ bits: data.bits, code: data.code });
       powWaiting.delete(data.req);
     };
   }
@@ -382,10 +384,10 @@ function onData(room, conn, msg) {
     const nonce = Number(msg.ev.tags.find((x) => x[0] === "pow")?.[1]);
     if (!Number.isSafeInteger(nonce) || nonce < 0) return conn.close();
     conn.checking = true;
-    powBits(id, nonce).then((bits) => {
+    powCheck(id, nonce).then(({ bits, code }) => {
       if (bits < POW_BITS) return conn.close();
-      powOk.set(id, nonce);
-      if (rooms.get(room.key) === room && room.pending.get(conn.peer) === conn && conn.open) acceptMember(room, conn, id, msg);
+      powOk.set(id, { nonce, code });
+      if (rooms.get(room.key) === room && room.pending.get(conn.peer) === conn && conn.open) acceptMember(room, conn, id, msg, code);
     });
     return;
   }
@@ -399,7 +401,7 @@ function onData(room, conn, msg) {
   onMemberData(room, m, msg);
 }
 
-function acceptMember(room, conn, id, msg) {
+function acceptMember(room, conn, id, msg, code) {
   room.pending.delete(conn.peer);
   // Déjà connecté à cette personne (reconnexion) : la nouvelle connexion remplace l'ancienne
   const old = room.members.get(id);
@@ -407,6 +409,7 @@ function acceptMember(room, conn, id, msg) {
   const m = {
     id,
     conn,
+    code,
     name: cleanName(msg.name),
     color: cleanColor(msg.color),
     chatTimes: [],
@@ -417,7 +420,7 @@ function acceptMember(room, conn, id, msg) {
   };
   room.members.set(id, m);
   if (!old) systemMessage(room.chat, room.kind === "page" ? "sysJoinedPage" : "sysJoinedSite", m.name);
-  knownPeople.set(id, { name: m.name, color: m.color });
+  knownPeople.set(id, { name: m.name, color: m.color, code });
   roomChanged(room);
   if (room.kind === "page") {
     const list = inkFor(room.key);
@@ -447,7 +450,7 @@ function onMemberData(room, m, msg) {
       const color = cleanColor(msg.color);
       if (name !== m.name) systemMessage(room.chat, "sysRenamed", m.name, name);
       Object.assign(m, { name, color });
-      knownPeople.set(m.id, { name, color });
+      knownPeople.set(m.id, { name, color, code: m.code });
       roomChanged(room);
       break;
     }
@@ -606,6 +609,7 @@ function receiveDm(m, text) {
   const thread = dmThread(m.id);
   addChat(thread.msgs, { from: m.id, name: m.name, color: m.color, text });
   thread.unread++;
+  dmReceived(m);
   update();
 }
 
@@ -672,8 +676,8 @@ function broadcastProfile() {
 }
 
 function block(id) {
-  const name = knownPeople.get(id)?.name ?? "?";
-  settings.blocked[id] = name;
+  const who = knownPeople.get(id);
+  settings.blocked[id] = who?.code ? `${who.name} · ${who.code}` : who?.name ?? "?";
   saveSettings();
   for (const room of rooms.values()) room.members.get(id)?.conn.close();
   dms.delete(id);

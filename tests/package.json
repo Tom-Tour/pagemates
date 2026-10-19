@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "description": "Pagemates tests",
+  "scripts": {
+    "test": "node engine.test.mjs && node page.test.cjs && node sidebar.test.cjs"
+  },
+  "devDependencies": {
+    "jsdom": "24.1.3"
+  }
+}

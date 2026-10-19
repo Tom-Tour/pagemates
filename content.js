@@ -408,6 +408,7 @@
 
   const IDLE_FADE = 20000;
   let frame = 0;
+  let fadeTimer = null;
 
   function inkCount() {
     let n = mine.size;
@@ -426,6 +427,7 @@
     const W = innerWidth;
     const H = innerHeight;
     const now = Date.now();
+    let nextFade = Infinity;
     drawInk();
     for (const peer of peers.values()) {
       if (!peer.ui) continue;
@@ -440,6 +442,7 @@
           transform: `translate(${x}px, ${y}px)`,
           opacity: String(now - peer.curAt > IDLE_FADE ? 0.35 : off || !p.exact ? 0.55 : 1),
         });
+        if (now - peer.curAt <= IDLE_FADE) nextFade = Math.min(nextFade, peer.curAt + IDLE_FADE - now);
         arrow.textContent = off;
         css(arrow, { display: off ? "block" : "none" });
         css(peer.ui.box.firstChild, { visibility: off ? "hidden" : "visible" });
@@ -449,7 +452,10 @@
       }
       drawSelection(peer);
     }
-    frame = requestAnimationFrame(draw);
+    // Pas de boucle continue : on ne redessine que quand quelque chose bouge (voir plus bas),
+    // plus une fois quand un curseur immobile doit s'estomper
+    clearTimeout(fadeTimer);
+    if (nextFade < Infinity) fadeTimer = setTimeout(schedule, nextFade + 50);
   }
 
   function drawSelection(peer) {
@@ -474,6 +480,12 @@
   function schedule() {
     if (!frame && needsFrame()) frame = requestAnimationFrame(draw);
   }
+
+  // Ce qui peut déplacer curseurs, surlignages et dessins : défilement (de la page ou d'un
+  // bloc), taille de la fenêtre, page modifiée par le site. Au plus un dessin par image.
+  addEventListener("scroll", schedule, { capture: true, passive: true });
+  addEventListener("resize", schedule, { passive: true });
+  new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true, attributes: true, characterData: true });
 
   // --- Dessins ------------------------------------------------------------------------
 

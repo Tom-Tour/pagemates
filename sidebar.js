@@ -94,7 +94,15 @@ function renderPerson() {
   if (!known) return;
   const close = el("button", { className: "small", textContent: "✕", title: t("close") });
   close.addEventListener("click", closePerson);
-  const head = el("div", { className: "person-head" }, swatch(known.color), el("strong", { textContent: known.name }), el("span", { className: "grow" }), close);
+  const head = el(
+    "div",
+    { className: "person-head" },
+    swatch(known.color),
+    el("strong", { textContent: known.name }),
+    codeTag(known.code),
+    el("span", { className: "grow" }),
+    close
+  );
   if (person.confirm) {
     const yes = el("button", { className: "danger", textContent: t("blockConfirm", known.name) });
     yes.addEventListener("click", () => {
@@ -222,6 +230,7 @@ function renderRoom(room, status) {
               { className: "person" + (d.id === dmWith ? " selected" : "") + (d.online ? "" : " away") },
               swatch(d.color),
               el("span", { textContent: d.name }),
+              codeTag(d.code),
               d.unread ? el("span", { className: "badge", textContent: d.unread }) : null,
               more(d.id)
             );
@@ -421,8 +430,19 @@ function more(id) {
   return b;
 }
 
+// Code de 4 caractères lié à l'identité : deux personnes au même pseudo n'ont pas le même
+function codeTag(code) {
+  return code ? el("span", { className: "code", textContent: code, title: t("codeHelp") }) : null;
+}
+
 function personChip(p) {
-  const chip = el("button", { className: "person" + (person?.id === p.id ? " selected" : ""), title: t("personMenu") }, swatch(p.color), el("span", { textContent: p.name }));
+  const chip = el(
+    "button",
+    { className: "person" + (person?.id === p.id ? " selected" : ""), title: t("personMenu") },
+    swatch(p.color),
+    el("span", { textContent: p.name }),
+    codeTag(p.code)
+  );
   chip.addEventListener("click", () => (person?.id === p.id ? closePerson() : openPerson(p.id)));
   if (p.inkHidden) chip.append(el("span", { className: "tag muted", textContent: "· " + t("inkHiddenTag") }));
   if (tab === "site" && p.here) chip.append(el("span", { className: "tag muted", textContent: "· " + t("onPage") }));
@@ -437,7 +457,8 @@ function chatLine(m) {
   const who = el("span", { className: "who" + (me ? " me" : ""), textContent: me ? t("you") : m.name });
   who.style.color = m.color;
   if (!me) {
-    who.title = t("personMenu");
+    const code = [...(snap.page?.people ?? []), ...(snap.site?.people ?? []), ...snap.dms].find((p) => p.id === m.from)?.code;
+    who.title = (code ? code + " · " : "") + t("personMenu");
     who.addEventListener("click", () => openPerson(m.from));
   }
   return el("li", {}, time, who, " ", m.text);
@@ -496,6 +517,7 @@ function fill(sel, prop, value, force) {
 function renderSettings(force = false) {
   const s = snap.settings;
   fill("#set-name", "value", s.name, force);
+  $("#my-code").textContent = snap.myCode || "…";
   fill("#set-color", "value", s.color, force);
   fill("#set-view", "value", s.view, force);
   fill("#set-lang", "value", s.lang, force);

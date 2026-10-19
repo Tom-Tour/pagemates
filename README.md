@@ -19,6 +19,8 @@ A Firefox extension that turns every web page into a room: chat with the people 
 - **Drawings**: switch on drawing mode (✏️ Draw) and draw right on the page; strokes stick to the page elements like cursors do. Your drawings are kept on your computer, page by page, and shown to the people on the page whenever you're there (without a server, nobody else keeps them). Ctrl+Z undoes the last stroke, Esc leaves drawing mode. Hide anyone's drawings from their card
 - **Private messages** to anyone you share a room with
 - **Anti-flood**, the same fixed rule for everyone: 2 messages per second at most; messages beyond the limit (from a modified extension) are ignored, and someone who keeps flooding is muted for a minute
+- **Identity code**: a 4-character code follows every name. It's tied to the identity, so someone taking your nickname won't have your code, and faking someone's code would take about an hour of computation on a powerful machine
+- **Private messages** you receive show on the toolbar button (✉ and a count), with a notification when the sidebar is closed
 - **Block** someone for good, from their card (click their name, then Block… and confirm): their cursor, highlights and messages (earlier ones included) disappear, and they stop receiving yours. Identities are signed keys, so nobody can impersonate them, and each identity costs a proof of work (see below), so a blocked person can't just come back with thousands of new ones
 - **Disconnect** from everything in one click, or leave a single site
 - English and French
@@ -26,17 +28,19 @@ A Firefox extension that turns every web page into a room: chat with the people 
 ## Privacy
 
 - **Off by default**: each site is joined on demand (sidebar → Join), unless you turn on "Join every site automatically". Never in private browsing, never automatically on local addresses
-- Nothing goes through a server of ours. People find each other through public Nostr relays, which only ever see a hash of the site, never the address. Everything else (chat, cursors, private messages) goes directly between browsers (WebRTC, encrypted)
+- Nothing goes through a server of ours. People find each other through public Nostr relays, which receive a hash of the page and of the site rather than the address. That hides private addresses, but not public pages: anyone can compute the hash of a known address and see whether people are on it. Everything else (chat, cursors, private messages) goes directly between browsers (WebRTC, encrypted)
 - People in a room know you're on that site, and on which page when you share it with them
 - As with any peer-to-peer connection, the people you're connected to can see your IP address
 - Cursor positions never contain page text. Highlights do send the selected text (you can turn that off). Form fields are never read
 - No history: messages live in memory only and vanish when you leave
 
+Firefox asks for your consent at install (Firefox 140 or later): the extension transmits your browsing activity (which pages you're on, as hashes), your activity on the page (cursor, clicks), page content (highlighted text) and your messages, to the people in your rooms only.
+
 ## Anti-spam proof of work
 
-On first launch, the extension spends about 30 seconds (only once) finding a number that makes `scrypt(identity + number)` start with 8 zero bits. Others check it in a fraction of a second during the handshake and refuse identities without it. scrypt needs 16 MB of memory per try, so graphics cards barely speed it up, unlike a plain hash.
+On first launch, the extension spends about 20 seconds (only once) finding a number that makes `scrypt(identity + number)` start with 7 zero bits. Others check it in a fraction of a second during the handshake and refuse identities without it. scrypt needs 4 MB of memory per try, so graphics cards barely speed it up, unlike a plain hash.
 
-It turns "free" fake accounts into costly ones: a thousand identities take a script running in a browser about an hour, even using every core. A determined attacker with a powerful machine and optimized code still needs minutes: it's a barrier against casual spam, not a fortress.
+It turns "free" fake accounts into costly ones: a thousand identities take a script running in a browser about an hour, even using every core. A determined attacker with a powerful machine and optimized code can still make a thousand in a minute or two: it's a barrier against casual spam, not a fortress. The cost was set so that it stays short in Firefox (about 20 seconds once), since a heavier proof took over two minutes there.
 
 ## Install (development)
 
@@ -53,6 +57,11 @@ The sidebar settings (⚙) end with an **About** section linking to this page an
 - `background.js`: settings, tabs, sidebar link
 - `pow-worker.js`: proof of work, computed off the main thread
 - Third-party: [PeerJS](https://peerjs.com), [nostr-tools](https://github.com/nbd-wtf/nostr-tools), [scrypt-js](https://github.com/ricmoo/scrypt-js) (MIT)
+
+## Tests
+
+- `cd tests && npm install && npm test`: engine (several engines on a simulated network), page script and sidebar
+- `python tests/e2e/run.py`: two real Firefox instances on the real network (PeerJS, Nostr relays, WebRTC), with Selenium (`pip install -r tests/e2e/requirements.txt`)
 
 ## Support
 

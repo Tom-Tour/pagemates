@@ -68,6 +68,7 @@ button.person { font: inherit; color: var(--fg); cursor: pointer; }
 .person .swatch { width: 8px; height: 8px; border-radius: 50%; }
 .person button { border: 0; background: none; padding: 0 2px; }
 .person .tag { font-size: 11px; }
+.code { font: 11px ui-monospace, monospace; color: var(--muted); letter-spacing: .5px; }
 #where { display: flex; align-items: flex-start; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
 #where-path { flex: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 2px; min-width: 0; }
 .where-site { margin-right: 2px; overflow-wrap: anywhere; }

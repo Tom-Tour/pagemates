@@ -21,7 +21,7 @@ const DEFAULTS = {
 };
 
 let settings = { ...DEFAULTS };
-let identity = { secret: null, pubkey: "", pow: null };
+let identity = { secret: null, pubkey: "", pow: null, code: "" };
 let mining = null; // { tries } pendant le calcul de la preuve de travail
 const sendTimes = [];
 
@@ -296,7 +296,37 @@ function pushPeers(tab) {
   if (json === tab.lastPeers) return;
   tab.lastPeers = json;
   tab.port.postMessage({ t: "peers", list });
-  browser.browserAction.setBadgeText({ tabId: tab.id, text: list.length ? String(list.length) : "" }).catch(() => {});
+  tab.here = list.length;
+  pushBadge(tab);
+}
+
+// Badge du bouton : messages privés non lus en priorité (en rouge), sinon personnes sur la page
+function pushBadge(tab) {
+  const unread = unreadDms();
+  const text = unread ? "✉" + unread : tab.here ? String(tab.here) : "";
+  const key = `${text}|${!!unread}`;
+  if (key === tab.lastBadge) return;
+  tab.lastBadge = key;
+  browser.browserAction.setBadgeText({ tabId: tab.id, text }).catch(() => {});
+  browser.browserAction.setBadgeBackgroundColor({ tabId: tab.id, color: unread ? "#e5484d" : "#0090ff" }).catch(() => {});
+}
+
+function unreadDms() {
+  let n = 0;
+  for (const th of dms.values()) n += th.unread;
+  return n;
+}
+
+// Message privé reçu : badge partout, et une notification si aucune barre latérale n'est
+// ouverte (sans le texte du message, qui pourrait s'afficher devant d'autres personnes)
+const notified = new Map(); // pubkey → dernière notification
+function dmReceived(m) {
+  for (const tab of tabs.values()) pushBadge(tab);
+  if (sidebars.size || Date.now() - (notified.get(m.id) ?? 0) < 60000) return;
+  notified.set(m.id, Date.now());
+  browser.notifications
+    .create("dm-" + m.id, { type: "basic", iconUrl: "icons/icon-96.png", title: "Pagemates", message: t("notifyDm", `${m.name} · ${m.code}`) })
+    .catch(() => {});
 }
 
 // --- Barre latérale ------------------------------------------------------------------
@@ -321,6 +351,7 @@ function roomInfo(room, here = null) {
       id: m.id,
       name: m.name,
       color: m.color,
+      code: m.code,
       here: here ? here.members.has(m.id) : true,
       muted: m.mutedUntil > now,
       inkHidden: !!settings.hiddenInk[m.id],
@@ -336,6 +367,7 @@ function snapshot(windowId) {
     settings,
     palette: PALETTE,
     me: identity.pubkey,
+    myCode: identity.code,
     instanceSize: INSTANCE_SIZE,
     sendRate: SEND_PER_SECOND,
     mining: mining && { tries: mining.tries, expected: 2 ** POW_BITS },
@@ -355,6 +387,7 @@ function snapshot(windowId) {
       id,
       name: knownPeople.get(id)?.name ?? "?",
       color: knownPeople.get(id)?.color ?? "#888888",
+      code: knownPeople.get(id)?.code ?? "",
       online: !!memberAnywhere(id),
       unread: th.unread,
       msgs: th.msgs,
@@ -466,6 +499,7 @@ const commands = {
     const th = dms.get(id);
     if (th?.unread) {
       th.unread = 0;
+      for (const tab of tabs.values()) pushBadge(tab);
       update();
     }
   },
@@ -545,7 +579,8 @@ function mineIdentity() {
     worker.terminate();
     mining = null;
     identity.pow = data.nonce;
-    browser.storage.local.set({ pow: { pubkey: identity.pubkey, nonce: data.nonce } });
+    identity.code = data.code;
+    browser.storage.local.set({ pow: { v: POW_VERSION, pubkey: identity.pubkey, nonce: data.nonce, code: data.code } });
     log(t("logPowDone"));
     reconcile();
   };
@@ -568,9 +603,11 @@ async function init() {
   let secret = typeof stored.identity === "string" && /^[0-9a-f]{64}$/.test(stored.identity) ? stored.identity : null;
   if (!secret) secret = hex(NostrTools.generateSecretKey());
   identity = { secret: unhex(secret), pubkey: NostrTools.getPublicKey(unhex(secret)), pow: null };
-  if (stored.pow?.pubkey === identity.pubkey && Number.isSafeInteger(stored.pow.nonce)) identity.pow = stored.pow.nonce;
+  const pow = stored.pow;
+  if (pow?.v === POW_VERSION && pow.pubkey === identity.pubkey && Number.isSafeInteger(pow.nonce)) identity.pow = pow.nonce;
   await browser.storage.local.set({ settings, identity: secret });
   if (identity.pow == null) mineIdentity();
+  else identity.code = pow.code;
   for (const tab of await browser.tabs.query({ active: true })) activeTab.set(tab.windowId, tab.id);
 }
 
