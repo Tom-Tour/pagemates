@@ -31,8 +31,12 @@ const HELLO_KIND = 27235; // éphémère : jamais publié, sert seulement à sig
 const POW_BITS = 8; // bits à zéro exigés : ~256 essais de scrypt, une trentaine de secondes
 const EARLY_MAX = 20; // messages gardés de côté pendant la vérification d'une poignée de main
 
-// Anti-flood à la réception, par personne : au-delà, les messages sont ignorés, et une
-// personne qui insiste est mise en sourdine une minute
+// Anti-flood. Les limites sont fixes et identiques pour tous : la réception tolère un peu
+// plus que l'envoi, si bien qu'une extension normale n'est jamais filtrée. Seul un client
+// modifié se heurte à la limite de réception : au-delà, ses messages sont ignorés, et s'il
+// insiste il est mis en sourdine une minute.
+const SEND_PER_SECOND = 2; // chat et MP envoyés
+const RECV_PER_SECOND = 3; // chat et MP acceptés, par personne
 const LIVE_PER_SECOND = 40; // curseurs, clics, surlignages
 const META_PER_SECOND = 4; // profil
 const FLOOD_DROPS = 30;
@@ -426,7 +430,7 @@ function onMemberData(room, m, msg) {
   const ok = live
     ? rateOk(m.liveTimes, LIVE_PER_SECOND, now)
     : chatty
-      ? rateOk(m.chatTimes, settings.recvRate, now)
+      ? rateOk(m.chatTimes, RECV_PER_SECOND, now)
       : rateOk(m.metaTimes, META_PER_SECOND, now);
   if (!ok) return flooded(room, m, now);
 
@@ -539,7 +543,7 @@ function sendChat(tab, kind, text) {
   if (!room || roomStatus(room) !== "open") return "errNotConnected";
   text = String(text ?? "").slice(0, TEXT_MAX).trim();
   if (!text) return null;
-  if (!rateOk(sendTimes, settings.sendRate)) return "errTooFast";
+  if (!rateOk(sendTimes, SEND_PER_SECOND)) return "errTooFast";
   for (const m of room.members.values()) safeSend(m.conn, { t: "chat", text });
   addChat(room.chat, { from: "me", name: settings.name, color: settings.color, text });
   update();
@@ -579,7 +583,7 @@ function sendDm(id, text) {
   if (!m) return "errDmOffline";
   text = String(text ?? "").slice(0, TEXT_MAX).trim();
   if (!text) return null;
-  if (!rateOk(sendTimes, settings.sendRate)) return "errTooFast";
+  if (!rateOk(sendTimes, SEND_PER_SECOND)) return "errTooFast";
   safeSend(m.conn, { t: "dm", text });
   addChat(dmThread(id).msgs, { from: "me", name: settings.name, color: settings.color, text });
   update();

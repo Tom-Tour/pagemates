@@ -74,19 +74,30 @@ function openDm(id) {
   $("#text").focus();
 }
 
-// Bouton à confirmer d'un second clic (les fenêtres de confirmation ne marchent pas ici)
-function confirmButton(label, sure, onConfirm) {
-  const b = el("button", { textContent: label, title: sure });
-  let armed = null;
-  b.addEventListener("click", () => {
-    if (armed) return onConfirm();
-    b.textContent = label + " ?";
-    b.classList.add("danger");
-    armed = setTimeout(() => {
+// Bouton à confirmer d'un second clic (les fenêtres de confirmation ne marchent pas ici).
+// L'état « armé » est gardé hors du bouton : la liste est refaite à chaque message reçu,
+// et le premier clic ne doit pas être perdu pour autant.
+let armed = null; // { key, timer }
+
+function confirmButton(label, key, sure, onConfirm) {
+  const on = armed?.key === key;
+  const b = el("button", { textContent: on ? label + " ?" : label, title: sure });
+  b.classList.toggle("danger", on);
+  b.addEventListener("click", (e) => {
+    e.stopPropagation();
+    clearTimeout(armed?.timer);
+    if (armed?.key === key) {
       armed = null;
-      b.textContent = label;
-      b.classList.remove("danger");
-    }, 3000);
+      return onConfirm();
+    }
+    armed = {
+      key,
+      timer: setTimeout(() => {
+        armed = null;
+        render();
+      }, 3000),
+    };
+    render();
   });
   return b;
 }
@@ -180,7 +191,8 @@ function renderRoom(room, status) {
               { className: "person" + (d.id === dmWith ? " selected" : "") + (d.online ? "" : " away") },
               swatch(d.color),
               el("span", { textContent: d.name }),
-              d.unread ? el("span", { className: "badge", textContent: d.unread }) : null
+              d.unread ? el("span", { className: "badge", textContent: d.unread }) : null,
+              confirmButton("⛔", "block:" + d.id, t("blockSure", d.name), () => act("block", d.id))
             );
             chip.style.cursor = "pointer";
             chip.addEventListener("click", () => {
@@ -277,7 +289,7 @@ function personChip(p) {
   if (p.muted) chip.append(el("span", { className: "tag muted", textContent: "· " + t("mutedFlood") }));
   const dm = el("button", { textContent: "✉", title: t("sendDm") });
   dm.addEventListener("click", () => openDm(p.id));
-  chip.append(dm, confirmButton("⛔", t("blockSure", p.name), () => act("block", p.id)));
+  chip.append(dm, confirmButton("⛔", "block:" + p.id, t("blockSure", p.name), () => act("block", p.id)));
   return chip;
 }
 
@@ -307,7 +319,7 @@ $("#send").addEventListener("submit", async (e) => {
   const text = input.value.trim();
   if (!text) return;
   const error = tab === "dm" ? await ask("dm", dmWith, text) : await ask("chat", windowId, tab, text);
-  if (error) return showError(t(error, snap.settings.sendRate));
+  if (error) return showError(t(error, snap.sendRate));
   showError(null);
   input.value = "";
 });
@@ -336,9 +348,6 @@ $("#set-lang").addEventListener("change", (e) => set({ lang: e.target.value }));
 for (const k of ["showCursors", "shareCursor", "shareSelection", "autoJoin"]) {
   $(`#set-${k}`).addEventListener("change", (e) => set({ [k]: e.target.checked }));
 }
-for (const k of ["sendRate", "recvRate"]) {
-  $(`#set-${k}`).addEventListener("change", (e) => set({ [k]: e.target.value }));
-}
 $("#toggle-connected").addEventListener("click", () => set({ connected: !snap.settings.connected }));
 
 // Les champs en cours d'édition ne sont pas écrasés par l'état reçu
@@ -353,8 +362,6 @@ function renderSettings(force = false) {
   fill("#set-color", "value", s.color, force);
   fill("#set-view", "value", s.view, force);
   fill("#set-lang", "value", s.lang, force);
-  fill("#set-sendRate", "value", s.sendRate, force);
-  fill("#set-recvRate", "value", s.recvRate, force);
   for (const k of ["showCursors", "shareCursor", "shareSelection", "autoJoin"]) fill(`#set-${k}`, "checked", s[k], true);
 
   const swatches = snap.palette.map((c) => {

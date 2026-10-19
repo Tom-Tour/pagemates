@@ -16,8 +16,8 @@ Une extension Firefox qui transforme chaque page web en salon : discute avec les
 - **Surlignages** : le texte sélectionné par les autres est surligné dans leur couleur, retrouvé par citation (le texte et les mots autour), ce qui résiste aux différences de mise en page
 - **Canaux**, comme dans les jeux en ligne : un salon accueille jusqu'à 20 personnes ; au-delà, les nouveaux arrivants ouvrent le canal #2, #3… Choisis n'importe quel canal par son numéro (donne-le à tes amis pour vous retrouver), passe sur un autre, ou ouvre-en un vide
 - **Messages privés** à toute personne avec qui tu partages un salon
-- **Anti-flood** : limite le nombre de messages que tu envoies par seconde, et ceux que tu acceptes par seconde de chaque personne ; quelqu'un qui insiste est mis en sourdine une minute
-- **Bloquer** quelqu'un pour de bon : les identités sont des clés signées, donc personne ne peut se faire passer pour quelqu'un d'autre, et chaque identité coûte une preuve de travail (voir plus bas), donc une personne bloquée ne peut pas simplement revenir avec des milliers de nouvelles
+- **Anti-flood**, même règle fixe pour tout le monde : 2 messages par seconde au plus ; les messages au-delà (venant d'une extension modifiée) sont ignorés, et quelqu'un qui insiste est mis en sourdine une minute
+- **Bloquer** quelqu'un pour de bon, depuis la liste des personnes ou depuis les messages privés : son curseur, ses surlignages et ses messages (anciens compris) disparaissent, et il ne reçoit plus les tiens. Les identités sont des clés signées, donc personne ne peut se faire passer pour quelqu'un d'autre, et chaque identité coûte une preuve de travail (voir plus bas), donc une personne bloquée ne peut pas simplement revenir avec des milliers de nouvelles
 - **Se déconnecter** de tout en un clic, ou quitter un seul site
 - Français et anglais
 

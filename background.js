@@ -15,8 +15,6 @@ const DEFAULTS = {
   connected: true, // interrupteur général
   autoJoin: false, // rejoindre tous les sites sans demander
   sites: {}, // site → true (toujours rejoindre) | false (jamais)
-  sendRate: 2, // messages envoyés par seconde, au plus
-  recvRate: 3, // messages reçus par seconde et par personne, au plus
   blocked: {}, // pubkey → dernier nom connu
 };
 
@@ -210,7 +208,7 @@ function roomInfo(room, here = null) {
       here: here ? here.members.has(m.id) : true,
       muted: m.mutedUntil > now,
     })),
-    chat: room.chat,
+    chat: room.chat.filter((m) => !settings.blocked[m.from]), // ce qu'une personne bloquée a écrit disparaît aussi
   };
 }
 
@@ -222,6 +220,7 @@ function snapshot(windowId) {
     palette: PALETTE,
     me: identity.pubkey,
     instanceSize: INSTANCE_SIZE,
+    sendRate: SEND_PER_SECOND,
     mining: mining && { tries: mining.tries, expected: 2 ** POW_BITS },
     ctx: tab?.site ? { site: tab.site, enabled: siteEnabled(tab.site), incognito: tab.incognito } : null,
     page: roomInfo(pageRoom),
@@ -246,7 +245,6 @@ function cleanSettings(patch) {
     else if (k === "color") out.color = cleanColor(v);
     else if (k === "view") out.view = ["both", "page", "site"].includes(v) ? v : "both";
     else if (k === "lang") out.lang = ["auto", "fr", "en"].includes(v) ? v : "auto";
-    else if (k === "sendRate" || k === "recvRate") out[k] = Math.min(20, Math.max(1, Math.round(Number(v)) || 1));
     else if (k === "sites") out.sites = v && typeof v === "object" ? v : {};
     else out[k] = !!v;
   }
@@ -388,6 +386,9 @@ function mineIdentity() {
 async function init() {
   const stored = await browser.storage.local.get(["settings", "identity", "pow"]);
   settings = { ...DEFAULTS, ...stored.settings };
+  // Anciens réglages d'anti-flood (0.1 à 0.3) : les limites sont désormais fixes
+  delete settings.sendRate;
+  delete settings.recvRate;
   if (!settings.name) settings.name = `${t("defaultName")}-${Math.floor(1000 + Math.random() * 9000)}`;
   if (!settings.color) settings.color = PALETTE[Math.floor(Math.random() * PALETTE.length)];
   setLang(settings.lang);

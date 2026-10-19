@@ -16,8 +16,8 @@ A Firefox extension that turns every web page into a room: chat with the people 
 - **Highlights**: text selected by others is highlighted in their color, found by quote (text plus surrounding words), so it survives layout differences
 - **Channels**, like in online games: a room holds up to 20 people; beyond that, newcomers open channel #2, #3… Pick any channel by its number (give it to your friends to meet up), switch to another one, or open an empty one
 - **Private messages** to anyone you share a room with
-- **Anti-flood**: limit the messages you send per second, and the messages you accept per second from each person; someone who keeps flooding is muted for a minute
-- **Block** someone for good: identities are signed keys, so nobody can impersonate them, and each identity costs a proof of work (see below), so a blocked person can't just come back with thousands of new ones
+- **Anti-flood**, the same fixed rule for everyone: 2 messages per second at most; messages beyond the limit (from a modified extension) are ignored, and someone who keeps flooding is muted for a minute
+- **Block** someone for good, from the people list or from private messages: their cursor, highlights and messages (earlier ones included) disappear, and they stop receiving yours. Identities are signed keys, so nobody can impersonate them, and each identity costs a proof of work (see below), so a blocked person can't just come back with thousands of new ones
 - **Disconnect** from everything in one click, or leave a single site
 - English and French
 
