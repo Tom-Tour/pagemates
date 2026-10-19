@@ -35,6 +35,7 @@ port.onMessage.addListener((msg) => {
   if (setLang(snap.settings.lang) || !translated) {
     translated = true;
     applyI18n();
+    translateGoForm();
     lastChat = "";
   }
   render();
@@ -210,20 +211,44 @@ function renderRoom(room, status) {
     : t(tab === "page" ? "chatPagePlaceholder" : "chatSitePlaceholder");
 }
 
-// Instances du salon : la nôtre, les autres (clic pour y passer), et « + » pour en ouvrir une
+// Canaux du salon : le nôtre, les autres (clic pour y passer), « + » pour en ouvrir un vide,
+// et un champ pour aller directement sur un numéro
+const chipsBox = el("span", { id: "instance-chips" });
+const addButton = el("button", { className: "small", textContent: "+" });
+addButton.addEventListener("click", () => switchInstance("new"));
+const goInput = el("input", { type: "number", min: 1, max: 9999 });
+const goForm = el("form", { id: "instance-go" }, goInput, el("button", { className: "small" }));
+goForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const n = Number(goInput.value);
+  if (!n) return;
+  goInput.value = "";
+  switchInstance(n);
+});
+const instanceLabel = el("span", { className: "muted" });
+$("#instances").append(instanceLabel, chipsBox, addButton, goForm);
+
+function translateGoForm() {
+  instanceLabel.textContent = t("instance");
+  addButton.title = t("instanceNew");
+  goInput.placeholder = t("instanceNumber");
+  goForm.title = t("instanceNumberHelp");
+  goForm.lastChild.textContent = t("instanceGo");
+}
+
+// Seuls les boutons de canaux sont refaits : le champ garde sa saisie et le focus
 function renderInstances(room) {
   const bar = $("#instances");
   bar.hidden = !room?.inst;
   if (bar.hidden) return;
-  const chips = room.instances.map(({ n, count }) => {
-    const b = el("button", { className: "small" + (n === room.inst ? " on" : ""), textContent: `#${n} · ${count}/${snap.instanceSize}` });
-    b.title = n === room.inst ? t("instanceCurrent") : t("instanceJoin", n);
-    if (n !== room.inst) b.addEventListener("click", () => switchInstance(n));
-    return b;
-  });
-  const add = el("button", { className: "small", textContent: "+", title: t("instanceNew") });
-  add.addEventListener("click", () => switchInstance("new"));
-  bar.replaceChildren(el("span", { className: "muted", textContent: t("instance") }), ...chips, add);
+  chipsBox.replaceChildren(
+    ...room.instances.map(({ n, count }) => {
+      const b = el("button", { className: "small" + (n === room.inst ? " on" : ""), textContent: `#${n} · ${count}/${snap.instanceSize}` });
+      b.title = n === room.inst ? t("instanceCurrent") : t("instanceJoin", n);
+      if (n !== room.inst) b.addEventListener("click", () => switchInstance(n));
+      return b;
+    })
+  );
 }
 
 async function switchInstance(n) {

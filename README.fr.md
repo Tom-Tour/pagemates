@@ -14,7 +14,7 @@ Une extension Firefox qui transforme chaque page web en salon : discute avec les
 - **Curseurs en direct** dans la couleur de ton choix, accrochés aux éléments de la page plutôt qu'aux pixels : un curseur se pose sur le même bouton ou le même paragraphe malgré une taille d'écran, un zoom ou une mise en page différents. Si l'élément n'existe pas chez toi (contenu personnalisé), le curseur s'affiche estompé à une position approximative ; s'il est hors de l'écran, une flèche sur le bord indique où il est
 - **Clics** : un cercle et un contour colorés sur l'élément cliqué par quelqu'un (affichage seulement, rien n'est cliqué à ta place)
 - **Surlignages** : le texte sélectionné par les autres est surligné dans leur couleur, retrouvé par citation (le texte et les mots autour), ce qui résiste aux différences de mise en page
-- **Instances**, comme dans les jeux en ligne : un salon accueille jusqu'à 20 personnes ; au-delà, les nouveaux arrivants ouvrent l'instance #2, #3… Tu peux changer d'instance à la main, ou en ouvrir une vide pour te retrouver entre amis
+- **Canaux**, comme dans les jeux en ligne : un salon accueille jusqu'à 20 personnes ; au-delà, les nouveaux arrivants ouvrent le canal #2, #3… Choisis n'importe quel canal par son numéro (donne-le à tes amis pour vous retrouver), passe sur un autre, ou ouvre-en un vide
 - **Messages privés** à toute personne avec qui tu partages un salon
 - **Anti-flood** : limite le nombre de messages que tu envoies par seconde, et ceux que tu acceptes par seconde de chaque personne ; quelqu'un qui insiste est mis en sourdine une minute
 - **Bloquer** quelqu'un pour de bon (les identités sont des clés signées : personne ne peut se faire passer pour quelqu'un d'autre)
@@ -41,7 +41,7 @@ Les réglages de la barre latérale (⚙) se terminent par une section **À prop
 ## Fonctionnement
 
 - `content.js` tourne dans chaque page : envoie ton curseur, tes clics et ta sélection, et dessine ceux des autres dans un calque en Shadow DOM fermé
-- `rooms.js` : un réseau pair-à-pair par salon et par instance (PeerJS, une seule connexion à son serveur par site), présence sur Nostr (qui dit aussi qui est dans quelle instance), poignée de main signée, chat, messages privés, limites de débit
+- `rooms.js` : un réseau pair-à-pair par salon et par canal (PeerJS, une seule connexion à son serveur par site), présence sur Nostr (qui dit aussi qui est sur quel canal), poignée de main signée, chat, messages privés, limites de débit
 - `background.js` : réglages, onglets, lien avec la barre latérale
 
 ## Soutenir

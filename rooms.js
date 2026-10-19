@@ -190,7 +190,8 @@ function switchInstance(room, inst) {
   const counts = instanceCounts(room);
   if (inst === "new") inst = Math.max(0, ...counts.keys()) + 1;
   inst = Math.floor(Number(inst));
-  if (!(inst >= 1) || inst === room.inst) return null;
+  if (!(inst >= 1 && inst < 10000)) return "errInstanceNumber";
+  if (inst === room.inst) return null;
   if ((counts.get(inst) ?? 0) >= MAX_PEERS) return "errInstanceFull";
   for (const m of room.members.values()) safeSend(m.conn, { t: "bye" });
   for (const m of room.members.values()) m.conn.close();
