@@ -482,5 +482,18 @@ sy2.send({ cmd: "setPageDepth", args: ["forum.example", null] });
 await wait(300);
 check("restore full address: back to own post room", f2.last("peers")?.list.length === 0 && sy2.last("snap").snap.ctx.parts.depth === null);
 
+// heartbeat: a connection that went silent (unreported WebRTC loss) is dropped
+const ytKey = Y1.eval(`[...rooms.values()].find((r) => r.kind === "page" && r.members.size).key`);
+const ytMember = (E) => `rooms.get(${JSON.stringify(ytKey)}).members.values().next().value`;
+Y1.eval(`${ytMember(Y1)}.heard = Date.now() - 31000; heartbeat();`);
+await wait(50);
+check("silent member who never pinged (older version): kept", Y1.eval(`rooms.get(${JSON.stringify(ytKey)}).members.size`) === 1);
+Y2.eval(`heartbeat()`);
+await wait(50);
+check("ping received: member marked as beating", Y1.eval(`${ytMember(Y1)}.beats`) === true);
+Y1.eval(`${ytMember(Y1)}.heard = Date.now() - 31000; heartbeat();`);
+await wait(50);
+check("silent for 30 s after pinging: dropped as a normal leave", Y1.eval(`rooms.get(${JSON.stringify(ytKey)}).members.size`) === 0 && y1.last("peers")?.list.length === 0);
+
 console.log(failures ? `\n${failures} FAILURE(S)` : "\nALL PASS");
 process.exit(failures ? 1 : 0);

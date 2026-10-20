@@ -44,6 +44,22 @@ let nostrPool = null;
 const pool = () => (nostrPool ??= new NostrTools.SimplePool());
 const pow = createPow({ app: "pagemates", worker: "common/pow-worker.js" });
 
+// Battement de cœur du kit (HEARTBEAT) : un ping à chaque membre de chaque salon, et ceux
+// dont rien n'est arrivé depuis trop longtemps sont retirés, sinon leur curseur et leur nom
+// resteraient affichés après une coupure que WebRTC n'a pas signalée. Seuls ceux qui ont
+// déjà envoyé un ping sont jugés : une version qui n'en envoie pas n'est pas retirée.
+function heartbeat(now = Date.now()) {
+  for (const room of rooms.values()) {
+    for (const m of [...room.members.values()]) {
+      if (m.beats && now - m.heard > HEARTBEAT.SILENCE) {
+        m.conn.close();
+        dropConn(room, m.conn);
+      } else safeSend(m.conn, { t: "ping" });
+    }
+  }
+}
+setInterval(heartbeat, HEARTBEAT.EVERY);
+
 // --- PeerJS partagé par les salons d'un site ----------------------------------------------
 
 function acquirePeer(siteKey, site) {
@@ -335,6 +351,8 @@ function acceptMember(room, conn, id, msg, code) {
     metaTimes: [],
     drops: [],
     mutedUntil: 0,
+    heard: Date.now(),
+    beats: false,
   };
   room.members.set(id, m);
   if (!old) systemMessage(room.chat, room.kind === "page" ? "sysJoinedPage" : "sysJoinedSite", m.name);
@@ -351,6 +369,7 @@ function acceptMember(room, conn, id, msg, code) {
 function onMemberData(room, m, msg) {
   const { conn } = m;
   const now = Date.now();
+  m.heard = now; // tout message compte comme signe de vie, même en sourdine
   if (m.mutedUntil > now) return;
 
   const live = ["cur", "click", "sel", "draw", "undraw"].includes(msg.t);
@@ -412,6 +431,9 @@ function onMemberData(room, m, msg) {
       for (const tab of tabsOnPage(room.key)) tab.port.postMessage({ t: "drawings", id: m.id, list });
       break;
     }
+    case "ping":
+      m.beats = true;
+      break;
     case "bye":
       conn.close();
       break;

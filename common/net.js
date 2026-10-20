@@ -20,6 +20,12 @@ const LIMITS = {
   MAX_PEERS: 24,
 };
 
+// Battement de cœur : WebRTC ne signale pas toujours une connexion perdue (navigateur fermé
+// brutalement, extension rechargée, réseau coupé). Chaque côté envoie { t: "ping" } toutes
+// les EVERY ms ; une connexion dont rien n'est arrivé depuis SILENCE ms est fermée, sinon
+// la personne resterait affichée en fantôme et reviendrait en double.
+const HEARTBEAT = { EVERY: 5 * 1000, SILENCE: 30 * 1000 };
+
 const nowSeconds = () => Math.floor(Date.now() / 1000);
 
 // Compteur glissant sur une seconde : true si l'événement passe (et il est compté)
