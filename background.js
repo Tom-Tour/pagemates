@@ -14,7 +14,7 @@ const DEFAULTS = {
   shareSelection: true,
   chatSound: false, // petit son à chaque nouveau message (salons et messages privés)
   connected: true, // interrupteur général
-  autoJoin: false, // rejoindre tous les sites sans demander
+  autoJoin: true, // rejoindre tous les sites sans demander (sauf navigation privée et adresses locales)
   sites: {}, // site → true (toujours rejoindre) | false (jamais)
   blocked: {}, // pubkey → dernier nom connu
   pageRules: {}, // site → { depth, params: { nom: true | false } } : ce qui définit le salon de page

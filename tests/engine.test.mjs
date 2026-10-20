@@ -159,6 +159,7 @@ const A = makeEngine("A", { ...base, name: "Alice", color: "#e5484d" });
 const B = makeEngine("B", { ...base, name: "Bob", color: "#0090ff" });
 const mined = async (...E) => { while (!E.every((e) => e.eval("identity.pow") != null)) await wait(50); };
 await mined(A, B); // preuve de travail des deux identités
+check("auto-join on by default: any public site, never local addresses", A.eval("siteEnabled('example.com')") === true && A.eval("siteEnabled('localhost')") === false && A.eval("siteEnabled('192.168.1.10')") === false);
 
 const a1 = A.page(1, "https://fr.wikipedia.org/wiki/Paris?utm_source=twitter#Histoire");
 const b1 = B.page(11, "https://www.fr.wikipedia.org/wiki/Paris/");
