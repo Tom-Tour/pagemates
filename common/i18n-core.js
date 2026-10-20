@@ -14,6 +14,9 @@ const COMMON_STRINGS = {
     // Navigation, réglages
     settings: "Réglages",
     back: "← Retour",
+    general: "Général",
+    display: "Affichage",
+    profile: "Profil",
     language: "Langue",
     langAuto: "Automatique (langue du navigateur)",
     log: "Journal",
@@ -65,6 +68,9 @@ const COMMON_STRINGS = {
   en: {
     settings: "Settings",
     back: "← Back",
+    general: "General",
+    display: "Display",
+    profile: "Profile",
     language: "Language",
     langAuto: "Automatic (browser language)",
     log: "Log",
