@@ -8,18 +8,10 @@ html, body { height: 100%; }
 #main > header { gap: 6px; padding: 8px; border-bottom: 1px solid var(--border); }
 #site { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #leave { white-space: nowrap; }
-/* Pastille d'état de la connexion */
-#dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-#dot.open { background: #46a758; }
-#dot.connecting { background: #ffb224; }
-#dot.error { background: var(--bad); }
 
 #tabs { padding: 0 8px; }
 
 #mining { margin: 8px; }
-#mining p { margin: 0 0 6px; }
-#mining-title { font-weight: 600; }
-#mining-bar { width: 100%; }
 #off { padding: 16px 12px; }
 #off p { margin: 0 0 8px; }
 #off-title { font-weight: 600; }
@@ -36,7 +28,8 @@ html, body { height: 100%; }
 #where { display: flex; align-items: flex-start; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
 #where-path { flex: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 2px; min-width: 0; }
 .where-site { margin-right: 2px; overflow-wrap: anywhere; }
-.token { padding: 0 4px; font-size: 12px; border-color: transparent; background: var(--active); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Morceau d'adresse : une .pill du kit, pleine quand il compte, barrée sinon */
+.token { border-color: transparent; background: var(--active); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .token.off { background: none; color: var(--muted); text-decoration: line-through; border-color: var(--border); border-style: dashed; }
 .token.reset { background: none; border-color: var(--border); }
 #channel { position: relative; flex: none; }

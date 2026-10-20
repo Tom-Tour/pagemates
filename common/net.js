@@ -26,6 +26,10 @@ const LIMITS = {
 // la personne resterait affichée en fantôme et reviendrait en double.
 const HEARTBEAT = { EVERY: 5 * 1000, SILENCE: 30 * 1000 };
 
+// Couleurs du badge du bouton de la barre d'outils (GUIDE.md section 3) : rouge pour les
+// messages privés non lus, bleu pour le nombre propre à l'extension
+const BADGE_COLORS = { PRIVATE: "#e5484d", COUNT: "#0090ff" };
+
 const nowSeconds = () => Math.floor(Date.now() / 1000);
 
 // Compteur glissant sur une seconde : true si l'événement passe (et il est compté)
@@ -54,13 +58,19 @@ function safeSend(conn, msg) {
   }
 }
 
-// Tout ce qui arrive des autres est nettoyé : texte borné, espaces écrasés
+// Tout ce qui arrive des autres est nettoyé : texte borné, caractères de contrôle remplacés
+// par une espace (sauf le retour à la ligne), caractères invisibles et d'inversion du sens
+// d'écriture retirés (sinon un message pourrait se faire passer pour un autre à l'affichage).
 function cleanText(value, max = LIMITS.TEXT_MAX) {
-  return String(value ?? "").slice(0, max).trim();
+  return String(value ?? "")
+    .replace(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/g, " ")
+    .replace(/[\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g, "")
+    .slice(0, max)
+    .trim();
 }
 
 function cleanName(value, fallback = "?") {
-  return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, LIMITS.NAME_MAX) || fallback;
+  return cleanText(value).replace(/\s+/g, " ").slice(0, LIMITS.NAME_MAX).trim() || fallback;
 }
 
 function cleanColor(value, fallback = "#888888") {

@@ -309,7 +309,7 @@ function pushBadge(tab) {
   if (key === tab.lastBadge) return;
   tab.lastBadge = key;
   browser.browserAction.setBadgeText({ tabId: tab.id, text }).catch(() => {});
-  browser.browserAction.setBadgeBackgroundColor({ tabId: tab.id, color: unread ? "#e5484d" : "#0090ff" }).catch(() => {});
+  browser.browserAction.setBadgeBackgroundColor({ tabId: tab.id, color: unread ? BADGE_COLORS.PRIVATE : BADGE_COLORS.COUNT }).catch(() => {});
 }
 
 function unreadDms() {
@@ -559,7 +559,7 @@ browser.tabs.onRemoved.addListener((tabId) => lastPageOfTab.delete(tabId)); // p
 browser.windows.onRemoved.addListener((windowId) => activeTab.delete(windowId));
 
 browser.browserAction.onClicked.addListener(() => browser.sidebarAction.toggle());
-browser.browserAction.setBadgeBackgroundColor({ color: "#0090ff" });
+browser.browserAction.setBadgeBackgroundColor({ color: BADGE_COLORS.COUNT });
 
 // À l'installation, les pages déjà ouvertes n'ont pas le script : on l'injecte
 browser.runtime.onInstalled.addListener(async () => {

@@ -179,7 +179,7 @@ function render() {
   const inRoom = ctx?.enabled && !ctx.incognito;
   const room = tab === "site" ? snap.site : snap.page;
   const status = inRoom ? room?.status ?? "connecting" : "off";
-  $("#dot").className = status;
+  $("#dot").className = "dot " + status;
   $("#site").textContent = ctx?.site ?? "Pagemates";
   // Les nombres de personnes sont dans les onglets
   const here = snap.page?.people.length ?? 0;
@@ -298,7 +298,7 @@ const short = (s, n = 18) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
 
 // Un morceau d'adresse cliquable ; barré quand il ne compte pas pour le salon
 function token(text, on, title, onClick) {
-  const b = el("button", { className: "token" + (on ? "" : " off"), textContent: text, title });
+  const b = el("button", { className: "pill token" + (on ? "" : " off"), textContent: text, title });
   b.addEventListener("click", onClick);
   return b;
 }
@@ -326,7 +326,7 @@ function renderWhere(room) {
       items.push(token(label, p.on, t(p.on ? "paramExclude" : "paramInclude", p.name), () => act("setPageParam", site, p.name, !p.on)));
     });
     if (parts.custom) {
-      const reset = el("button", { className: "token reset", textContent: "↺", title: t("pageReset") });
+      const reset = el("button", { className: "pill token reset", textContent: "↺", title: t("pageReset") });
       reset.addEventListener("click", () => act("resetPage", site));
       items.push(reset);
     }
