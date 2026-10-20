@@ -39,7 +39,7 @@ def check(name, ok, extra=""):
 def start(label):
     o = Options()
     o.add_argument("-headless")
-    o.set_preference("extensions.webextensions.uuids", json.dumps({"pagemates@tom-tour": UUID}))
+    o.set_preference("extensions.webextensions.uuids", json.dumps({"pagemates@tom-tour.github.io": UUID}))
     if not OBFUSCATE:
         o.set_preference("media.peerconnection.ice.obfuscate_host_addresses", False)
     d = webdriver.Firefox(options=o)
