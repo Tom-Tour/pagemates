@@ -1,8 +1,9 @@
 {
   "manifest_version": 2,
-  "name": "Pagemates",
+  "name": "__MSG_extName__",
   "version": "0.7.0",
-  "description": "Every web page is a room: chat with people on the same page or site, see their cursors, clicks and highlights.",
+  "description": "__MSG_extDescription__",
+  "default_locale": "en",
   "browser_specific_settings": {
     "gecko": {
       "id": "pagemates@tom-tour",

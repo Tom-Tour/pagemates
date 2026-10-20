@@ -1,4 +1,4 @@
-# Pagemates
+# <img src="icons/icon.svg" width="40" align="top" alt=""> Pagemates
 
 Une extension Firefox qui transforme chaque page web en salon : discute avec les personnes sur la même page ou le même site, et vois leurs curseurs, leurs clics et leurs surlignages en direct.
 

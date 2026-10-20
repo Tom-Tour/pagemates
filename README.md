@@ -1,4 +1,4 @@
-# Pagemates
+# <img src="icons/icon.svg" width="40" align="top" alt=""> Pagemates
 
 A Firefox extension that turns every web page into a room: chat with the people on the same page or the same site, and see their cursors, clicks and highlights live.
 
