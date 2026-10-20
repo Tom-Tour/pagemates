@@ -2,7 +2,7 @@
 
 **English** · [Français](README.fr.md)
 
-[![Support me on Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20me-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/tom_t)
+[![Get it on Firefox Add-ons](https://img.shields.io/badge/Firefox-Get%20the%20add--on-FF7139?logo=firefoxbrowser&logoColor=white)](https://addons.mozilla.org/firefox/addon/pagemates/) [![Support me on Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20me-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/tom_t)
 
 A Firefox extension that turns every web page into a room: chat with the people on the same page or the same site, and see their cursors, clicks and highlights live.
 
@@ -44,11 +44,15 @@ It turns "free" fake accounts into costly ones: a thousand identities take a scr
 
 ## Installation
 
+Install it from **[addons.mozilla.org](https://addons.mozilla.org/firefox/addon/pagemates/)** (Firefox 140 or later).
+
+To try the development version instead, as a temporary add-on:
+
 1. Open `about:debugging#/runtime/this-firefox`
 2. "Load Temporary Add-on…" and pick `manifest.json`
 3. Click the toolbar button (or Alt+Shift+P) to open the sidebar
 
-A temporary add-on is removed when Firefox closes, and its data with it (identity, blocked people, drawings): install a signed version to keep them.
+A temporary add-on is removed when Firefox closes, and its data with it (identity, blocked people, drawings): install it from addons.mozilla.org to keep them.
 
 The sidebar settings (⚙) end with an **About** section linking to this page and to Ko-fi.
 

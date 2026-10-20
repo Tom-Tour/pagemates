@@ -2,7 +2,7 @@
 
 [English](README.md) · **Français**
 
-[![Soutenir sur Ko-fi](https://img.shields.io/badge/Ko--fi-Soutenir-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/tom_t)
+[![Installer depuis Firefox Add-ons](https://img.shields.io/badge/Firefox-Installer%20le%20module-FF7139?logo=firefoxbrowser&logoColor=white)](https://addons.mozilla.org/fr/firefox/addon/pagemates/) [![Soutenir sur Ko-fi](https://img.shields.io/badge/Ko--fi-Soutenir-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/tom_t)
 
 Une extension Firefox qui transforme chaque page web en salon : discute avec les personnes sur la même page ou le même site, et vois leurs curseurs, leurs clics et leurs surlignages en direct.
 
@@ -44,11 +44,15 @@ Les faux comptes, gratuits jusque-là, deviennent coûteux : mille identités de
 
 ## Installation
 
+Installe-le depuis **[addons.mozilla.org](https://addons.mozilla.org/fr/firefox/addon/pagemates/)** (Firefox 140 ou plus récent).
+
+Pour essayer la version de développement, en module temporaire :
+
 1. Ouvre `about:debugging#/runtime/this-firefox`
 2. « Charger un module complémentaire temporaire… » et choisis `manifest.json`
 3. Clique sur le bouton de la barre d'outils (ou Alt+Shift+P) pour ouvrir la barre latérale
 
-Un module temporaire disparaît à la fermeture de Firefox, avec ses données (identité, personnes bloquées, dessins) : installe une version signée pour les garder.
+Un module temporaire disparaît à la fermeture de Firefox, avec ses données (identité, personnes bloquées, dessins) : installe-le depuis addons.mozilla.org pour les garder.
 
 Les réglages de la barre latérale (⚙) se terminent par une section **À propos** avec les liens vers cette page et vers Ko-fi.
 
