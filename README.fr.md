@@ -1,12 +1,12 @@
 # <img src="icons/icon.svg" width="40" align="top" alt=""> Pagemates
 
-Une extension Firefox qui transforme chaque page web en salon : discute avec les personnes sur la même page ou le même site, et vois leurs curseurs, leurs clics et leurs surlignages en direct.
-
 [English](README.md) · **Français**
 
-> Version de découverte.
+[![Soutenir sur Ko-fi](https://img.shields.io/badge/Ko--fi-Soutenir-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/tom_t)
 
-[![Ko-fi](https://img.shields.io/badge/Ko--fi-soutenir-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/tom_t)
+Une extension Firefox qui transforme chaque page web en salon : discute avec les personnes sur la même page ou le même site, et vois leurs curseurs, leurs clics et leurs surlignages en direct.
+
+> Version de découverte.
 
 ## Fonctionnalités
 
@@ -36,7 +36,7 @@ Une extension Firefox qui transforme chaque page web en salon : discute avec les
 
 Firefox demande ton accord à l'installation (Firefox 140 ou plus récent) : l'extension transmet ton activité de navigation (les pages où tu es, sous forme d'empreintes), ton activité sur la page (curseur, clics), du contenu de page (texte surligné) et tes messages, uniquement aux personnes de tes salons.
 
-## Preuve de travail anti-spam
+### Preuve de travail anti-spam
 
 Au premier lancement, l'extension passe une vingtaine de secondes (une seule fois) à chercher un nombre tel que `scrypt(identité + nombre)` commence par 7 bits à zéro. Les autres le vérifient en une fraction de seconde pendant la poignée de main et refusent les identités qui n'en ont pas. scrypt demande 4 Mo de mémoire par essai : les cartes graphiques n'y gagnent presque rien, contrairement à un simple hachage.
 

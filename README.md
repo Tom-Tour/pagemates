@@ -1,12 +1,12 @@
 # <img src="icons/icon.svg" width="40" align="top" alt=""> Pagemates
 
-A Firefox extension that turns every web page into a room: chat with the people on the same page or the same site, and see their cursors, clicks and highlights live.
-
 **English** · [Français](README.fr.md)
 
-> Early version.
+[![Support me on Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20me-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/tom_t)
 
-[![Ko-fi](https://img.shields.io/badge/Ko--fi-support-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/tom_t)
+A Firefox extension that turns every web page into a room: chat with the people on the same page or the same site, and see their cursors, clicks and highlights live.
+
+> Early version.
 
 ## Features
 
@@ -36,7 +36,7 @@ A Firefox extension that turns every web page into a room: chat with the people 
 
 Firefox asks for your consent at install (Firefox 140 or later): the extension transmits your browsing activity (which pages you're on, as hashes), your activity on the page (cursor, clicks), page content (highlighted text) and your messages, to the people in your rooms only.
 
-## Anti-spam proof of work
+### Anti-spam proof of work
 
 On first launch, the extension spends about 20 seconds (only once) finding a number that makes `scrypt(identity + number)` start with 7 zero bits. Others check it in a fraction of a second during the handshake and refuse identities without it. scrypt needs 4 MB of memory per try, so graphics cards barely speed it up, unlike a plain hash.
 

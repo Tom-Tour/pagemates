@@ -21,7 +21,6 @@ html, body { height: 100%; }
 #people, #dm-list { padding: 6px 8px; border-bottom: 1px solid var(--border); max-height: 30%; overflow-y: auto; }
 #tools { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px 8px 0; }
 #person { margin: 6px 8px; }
-.chip button { border: 0; background: none; padding: 0 2px; }
 .chip .tag { font-size: 11px; }
 
 /* Ligne « où je suis » : adresse en morceaux cliquables, et le canal */
