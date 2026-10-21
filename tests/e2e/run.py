@@ -12,6 +12,7 @@ from selenium import webdriver
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.firefox.service import Service
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.abspath(os.path.join(HERE, "..", ".."))
@@ -20,6 +21,8 @@ BUILD = os.path.join(SP, "build")
 UUID = "5e1f0c6a-7a39-4b8e-9a51-2d4c3b1a0f00"
 TAG = "".join(random.choices(string.ascii_lowercase, k=8))
 PAGE = f"https://fr.wikipedia.org/wiki/Paris?pmtest={TAG}"
+EARLY = "https://fr.wikipedia.org/wiki/Lyon"
+LATER = "https://fr.wikipedia.org/wiki/Marseille"
 OBFUSCATE = "--no-obfuscate" not in sys.argv
 
 shutil.rmtree(BUILD, ignore_errors=True)
@@ -42,9 +45,12 @@ def start(label):
     o.set_preference("extensions.webextensions.uuids", json.dumps({"pagemates@tom-tour.github.io": UUID}))
     if not OBFUSCATE:
         o.set_preference("media.peerconnection.ice.obfuscate_host_addresses", False)
-    d = webdriver.Firefox(options=o)
+    # system access: to disable and re-enable the extension (step 1b)
+    d = webdriver.Firefox(options=o, service=Service(service_args=["--allow-system-access"]))
     d.set_window_size(1100, 800)
+    d.get(EARLY)  # opened before the extension: the script must be injected there too
     d.install_addon(BUILD, temporary=True)
+    d.switch_to.new_window("tab")
     d.get(PAGE)
     d.page_tab = d.current_window_handle
     d.label = label
@@ -94,6 +100,33 @@ t1 = time.time()
 sa = wait_for(A, lambda s: s["mining"] is None and s["myCode"], 300)
 sb = wait_for(B, lambda s: s["mining"] is None and s["myCode"], 300)
 check(f"identities mined (A {sa and sa['myCode']}, B {sb and sb['myCode']}) in {time.time() - t1:.0f}s", bool(sa and sb))
+
+A.switch_to.window(A.page_tab)
+A.execute_script("window.postMessage({ pmTabs: true }, '*')")
+time.sleep(1)
+early = json.loads(A.execute_script("return document.documentElement.getAttribute('data-pm-tabs')") or "[]")
+check("page opened before the install is followed too", EARLY in early, early)
+
+# 1b. disabled, a page opened meanwhile, enabled again: that page is followed as well
+def addon_enabled(d, on):
+    d.set_context(d.CONTEXT_CHROME)
+    d.execute_async_script("""
+        const done = arguments[arguments.length - 1];
+        const { AddonManager } = ChromeUtils.importESModule("resource://gre/modules/AddonManager.sys.mjs");
+        AddonManager.getAddonByID("pagemates@tom-tour.github.io").then((a) => (arguments[0] ? a.enable() : a.disable())).then(() => done());
+    """, on)
+    d.set_context(d.CONTEXT_CONTENT)
+addon_enabled(A, False)
+A.switch_to.new_window("tab")
+A.get(LATER)
+addon_enabled(A, True)
+A.switch_to.window(A.page_tab)
+A.refresh()  # the test bridge of this tab belonged to the previous run of the extension
+time.sleep(2)
+A.execute_script("window.postMessage({ pmTabs: true }, '*')")
+time.sleep(1)
+later = json.loads(A.execute_script("return document.documentElement.getAttribute('data-pm-tabs')") or "[]")
+check("page opened while disabled is followed once enabled", LATER in later, later)
 
 # 2. join the site, meet on the page (real PeerJS + Nostr + WebRTC)
 for d in (A, B):

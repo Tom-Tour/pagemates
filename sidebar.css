@@ -41,8 +41,8 @@ html, body { height: 100%; }
 #chat { flex: 1; margin: 0; padding: 6px 8px; list-style: none; }
 #send { padding: 8px; border-top: 1px solid var(--border); }
 /* Choix du pseudo, proposé au-dessus de la saisie tant qu'il n'a pas été choisi */
-#name-ask { flex-wrap: wrap; padding: 8px 8px 0; border-top: 1px solid var(--border); }
-#name-ask label { flex-basis: 100%; font-size: 12px; color: var(--muted); }
+#name-ask { align-items: center; padding: 8px 8px 0; border-top: 1px solid var(--border); }
+#name-ask label { color: var(--muted); }
 #name-ask + #send { border-top: none; }
 
 /* --- Réglages --- */

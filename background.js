@@ -229,7 +229,7 @@ function setDrawMode(tab, on) {
   update();
 }
 
-function connectPage(port) {
+function connectPage(port, early = []) {
   const t0 = port.sender.tab;
   if (!t0) return;
   const tab = {
@@ -245,7 +245,7 @@ function connectPage(port) {
     lastPeers: "",
   };
   port.postMessage(contentConfig());
-  port.onMessage.addListener((msg) => {
+  const onMessage = (msg) => {
     if (msg.t === "url") applyUrl(tab, msg.url);
     else if (msg.t === "drawMode") {
       // Échap dans la page
@@ -256,7 +256,9 @@ function connectPage(port) {
     } else if (msg.t === "cur" || msg.t === "click" || msg.t === "sel") {
       if (tabs.get(tab.id) === tab) relayLive(tab, msg);
     }
-  });
+  };
+  port.onMessage.addListener(onMessage);
+  for (const msg of early) onMessage(msg);
   port.onDisconnect.addListener(() => {
     if (tabs.get(tab.id) !== tab) return;
     tabs.delete(tab.id);
@@ -547,7 +549,19 @@ function connectSidebar(port) {
 // --- Démarrage ---------------------------------------------------------------------
 
 browser.runtime.onConnect.addListener((port) => {
-  if (port.name === "page") ready.then(() => connectPage(port));
+  if (port.name === "page") {
+    // Le script de la page envoie son adresse tout de suite : pendant le démarrage du moteur
+    // (installation, activation, ouverture de Firefox), ses messages sont gardés pour après
+    let early = [];
+    let gone = false;
+    port.onMessage.addListener((msg) => early?.push(msg));
+    port.onDisconnect.addListener(() => (gone = true));
+    ready.then(() => {
+      const kept = early;
+      early = null;
+      if (!gone) connectPage(port, kept);
+    });
+  }
   else if (port.name === "sidebar") connectSidebar(port);
 });
 
@@ -565,11 +579,11 @@ browser.windows.onRemoved.addListener((windowId) => activeTab.delete(windowId));
 browser.browserAction.onClicked.addListener(() => browser.sidebarAction.toggle());
 browser.browserAction.setBadgeBackgroundColor({ color: BADGE_COLORS.COUNT });
 
-// À l'installation, les pages déjà ouvertes n'ont pas le script : on l'injecte
-browser.runtime.onInstalled.addListener(async () => {
-  for (const tab of await browser.tabs.query({ url: ["http://*/*", "https://*/*"] })) {
-    browser.tabs.executeScript(tab.id, { file: "content.js" }).catch(() => {});
-  }
+// Pages ouvertes avant le démarrage du module (installation, activation, mise à jour) : le
+// script n'y est pas encore, on l'injecte. Il ne s'installe qu'une fois par page ; les onglets
+// pas encore chargés le recevront à leur chargement.
+browser.tabs.query({ url: ["http://*/*", "https://*/*"] }).then((list) => {
+  for (const tab of list) browser.tabs.executeScript(tab.id, { file: "content.js" }).catch(() => {});
 });
 
 // Preuve de travail de notre identité : une seule fois, puis gardée avec la clé

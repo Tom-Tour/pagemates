@@ -12,5 +12,6 @@
   root.setAttribute("data-pm-window", String(windowId));
   window.addEventListener("message", (e) => {
     if (e.source === window && e.data?.pmProbe) port.postMessage({ cmd: e.data.cmd, args: e.data.args, req: e.data.req });
+    if (e.source === window && e.data?.pmTabs) browser.runtime.sendMessage("pm-tabs").then((urls) => root.setAttribute("data-pm-tabs", JSON.stringify(urls)));
   });
 })();

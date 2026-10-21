@@ -104,7 +104,7 @@ setTimeout(() => {
   listeners.forEach((f) => f({ t: "snap", snap: mine(false) }));
   const myName = [...w.document.querySelectorAll("#chat .who.me")];
   check("own message shows the nickname", myName.length === 1 && myName[0].textContent === "Invité-4242", myName.map((e) => e.textContent).join());
-  check("nickname offered before talking", !q("#name-ask").hidden && q("#ask-name").value === "Invité-4242" && q("#name-ask label").textContent.startsWith("Pseudo affiché"));
+  check("nickname offered before talking", !q("#name-ask").hidden && q("#ask-name").value === "Invité-4242" && q("#name-ask label").textContent === "Pseudo" && q("#name-ask").title.startsWith("Pseudo affiché"));
   q("#ask-name").value = "Tom";
   q("#name-ask").dispatchEvent(new w.Event("submit", { cancelable: true }));
   const named = sent.filter((m) => m.cmd === "setSettings").at(-1);
