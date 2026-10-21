@@ -98,6 +98,19 @@ setTimeout(() => {
   check("sound for a new message when on", beeps === 1);
   listeners.forEach((f) => f({ t: "snap", snap: withMsg(true, 51) }));
   check("no sound for the same message again", beeps === 1);
+  // own messages: the nickname, highlighted; nickname offered until chosen
+  q("#tabs [data-tab=page]").click();
+  const mine = (nameSet) => ({ ...snap, mining: null, settings: { ...snap.settings, name: "Invité-4242", nameSet }, page: { ...snap.page, chat: [...snap.page.chat, { id: 60, at: Date.now(), from: "me", name: "Invité-4242", color: "#e5484d", text: "coucou" }] } });
+  listeners.forEach((f) => f({ t: "snap", snap: mine(false) }));
+  const myName = [...w.document.querySelectorAll("#chat .who.me")];
+  check("own message shows the nickname", myName.length === 1 && myName[0].textContent === "Invité-4242", myName.map((e) => e.textContent).join());
+  check("nickname offered before talking", !q("#name-ask").hidden && q("#ask-name").value === "Invité-4242" && q("#name-ask label").textContent.startsWith("Pseudo affiché"));
+  q("#ask-name").value = "Tom";
+  q("#name-ask").dispatchEvent(new w.Event("submit", { cancelable: true }));
+  const named = sent.filter((m) => m.cmd === "setSettings").at(-1);
+  check("choosing it saves the nickname", named && JSON.stringify(named.args) === '[{"name":"Tom"}]', JSON.stringify(named));
+  listeners.forEach((f) => f({ t: "snap", snap: mine(true) }));
+  check("no offer once chosen", q("#name-ask").hidden);
   console.log(fails ? `\n${fails} FAILURE(S)` : "\nALL PASS");
   process.exit(fails ? 1 : 0);
 }, 50);

@@ -6,6 +6,7 @@ const PALETTE = ["#e5484d", "#f76b15", "#ffb224", "#46a758", "#12a594", "#0090ff
 
 const DEFAULTS = {
   name: "",
+  nameSet: false, // pseudo choisi ou accepté (sinon proposé au début de la première conversation)
   color: "",
   lang: "auto",
   view: "both", // "both" | "page" | "site" : salons affichés dans la barre latérale
@@ -401,7 +402,10 @@ function cleanSettings(patch) {
   const out = {};
   for (const [k, v] of Object.entries(patch)) {
     if (!(k in DEFAULTS) || k === "blocked" || k === "pageRules" || k === "hiddenInk") continue;
-    if (k === "name") out.name = cleanName(v);
+    if (k === "name") {
+      out.name = cleanName(v);
+      out.nameSet = true;
+    }
     else if (k === "color") out.color = cleanColor(v);
     else if (k === "view") out.view = ["both", "page", "site"].includes(v) ? v : "both";
     else if (k === "lang") out.lang = ["auto", "fr", "en"].includes(v) ? v : "auto";
@@ -596,6 +600,8 @@ async function init() {
   // Anciens réglages d'anti-flood (0.1 à 0.3) : les limites sont désormais fixes
   delete settings.sendRate;
   delete settings.recvRate;
+  // Réglages d'avant nameSet : un pseudo déjà changé compte comme choisi
+  if (stored.settings?.name && !/^(Invité|Guest)-\d{4}$/.test(stored.settings.name)) settings.nameSet = true;
   if (!settings.name) settings.name = `${t("defaultName")}-${Math.floor(1000 + Math.random() * 9000)}`;
   if (!settings.color) settings.color = PALETTE[Math.floor(Math.random() * PALETTE.length)];
   setLang(settings.lang);

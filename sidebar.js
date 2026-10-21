@@ -261,7 +261,7 @@ function renderRoom(room, status) {
   // Messages
   const thread = isDm ? dms.find((d) => d.id === dmWith) : null;
   const msgs = isDm ? thread?.msgs ?? [] : room?.chat ?? [];
-  const key = `${tab}|${dmWith}|${msgs.length}|${msgs.at(-1)?.id}|${LANG}`;
+  const key = `${tab}|${dmWith}|${msgs.length}|${msgs.at(-1)?.id}|${LANG}|${snap.settings.name}`;
   if (key !== lastChat) {
     lastChat = key;
     const box = $("#chat");
@@ -276,6 +276,9 @@ function renderRoom(room, status) {
   const canSend = isDm ? !!thread?.online : status === "open";
   input.disabled = !canSend;
   $("#send button").disabled = !canSend;
+  // Pseudo pas encore choisi : proposé au début de la conversation
+  $("#name-ask").hidden = snap.settings.nameSet || !canSend;
+  if (document.activeElement !== $("#ask-name")) $("#ask-name").value = snap.settings.name;
   input.placeholder = isDm
     ? thread
       ? thread.online
@@ -455,9 +458,10 @@ function chatLine(m) {
   const time = el("time", { textContent: new Date(m.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) });
   if (m.system) return el("li", { className: "msg system" }, time, t(m.key, ...(m.args ?? [])));
   const me = m.from === "me";
-  const who = el("span", { className: "who" + (me ? " me" : ""), textContent: me ? t("you") : m.name });
+  const who = el("span", { className: "who" + (me ? " me" : ""), textContent: me ? snap.settings.name : m.name });
   who.style.color = m.color;
-  if (!me) {
+  if (me) who.title = t("myNameTitle");
+  else {
     const code = [...(snap.page?.people ?? []), ...(snap.site?.people ?? []), ...snap.dms].find((p) => p.id === m.from)?.code;
     who.title = (code ? code + " · " : "") + t("personMenu");
     who.addEventListener("click", () => openPerson(m.from));
@@ -481,6 +485,14 @@ $("#send").addEventListener("submit", async (e) => {
   if (error) return showError(t(error, snap.sendRate));
   showError(null);
   input.value = "";
+  if (!snap.settings.nameSet) set({ nameSet: true }); // le pseudo proposé est gardé
+});
+
+$("#name-ask").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const name = $("#ask-name").value.trim();
+  set(name ? { name } : { nameSet: true });
+  $("#text").focus();
 });
 
 $("#leave").addEventListener("click", () => snap.ctx && act("setSite", snap.ctx.site, false));
