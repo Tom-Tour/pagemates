@@ -11,7 +11,7 @@ html, body { height: 100%; }
 
 #tabs { padding: 0 8px; }
 
-#mining { margin: 8px; }
+#mining, #identity-failed { margin: 8px; }
 #off { padding: 16px 12px; }
 #off p { margin: 0 0 8px; }
 #off-title { font-weight: 600; }

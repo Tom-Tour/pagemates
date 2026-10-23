@@ -511,6 +511,10 @@ const commands = {
   block(id) {
     block(id);
   },
+  // Relancer le calcul de l'identité après un échec (bouton du bandeau)
+  retryIdentity() {
+    myIdentity.retry();
+  },
   unblock(id) {
     const { [id]: _, ...rest } = settings.blocked;
     settings.blocked = rest;
@@ -581,6 +585,7 @@ browser.tabs.query({ url: ["http://*/*", "https://*/*"] }).then((list) => {
 
 // Identité : clé Nostr et preuve de travail (calculée une seule fois), reprises ou créées par
 // le kit ; gardées dans browser.storage (« identity », « pow »)
+let identityFailLogged = false;
 const myIdentity = createIdentity({
   pow,
   read: async () => {
@@ -588,7 +593,12 @@ const myIdentity = createIdentity({
     return { secret: stored.identity, proof: stored.pow };
   },
   write: ({ secret, proof }) => browser.storage.local.set(secret ? { identity: secret } : { pow: proof }),
-  onChange: () => update(),
+  onChange: () => {
+    // Échec du calcul : noté une seule fois par échec (onChange est aussi appelé pendant le calcul)
+    if (myIdentity.failed && !identityFailLogged) log(t("identityFailed"));
+    identityFailLogged = myIdentity.failed;
+    update();
+  },
   onReady: (code) => {
     log(t("logIdentityReady", code));
     reconcile();

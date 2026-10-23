@@ -46,6 +46,14 @@ setTimeout(() => {
   check("no mining banner by default", w.document.querySelector("#mining").hidden);
   listeners.forEach((f) => f({ t: "snap", snap: { ...snap, mining: { percent: 25 } } }));
   check("mining banner shows 25 %", !w.document.querySelector("#mining").hidden && w.document.querySelector("#mining-title").textContent.includes("25 %"), w.document.querySelector("#mining-title").textContent);
+  check("no failure notice while mining", w.document.querySelector("#identity-failed").hidden);
+  listeners.forEach((f) => f({ t: "snap", snap: { ...snap, mining: null, identityFailed: true } }));
+  const failed = w.document.querySelector("#identity-failed");
+  check("failure notice shown instead of the mining banner", !failed.hidden && w.document.querySelector("#mining").hidden && failed.textContent.includes("Création de l'identité impossible"), failed.textContent);
+  w.document.querySelector("#identity-retry").click();
+  check("retry button sends retryIdentity", w.document.querySelector("#identity-retry").textContent === "Réessayer" && sent.some((m) => m.cmd === "retryIdentity"));
+  listeners.forEach((f) => f({ t: "snap", snap: { ...snap, mining: null } }));
+  check("failure notice gone once fixed", failed.hidden);
   check("chat rendered", w.document.querySelector("#chat").textContent.includes("salut"));
   // person card: blocking takes three deliberate steps
   const q = (sel) => w.document.querySelector(sel);

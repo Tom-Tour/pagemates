@@ -143,6 +143,9 @@ function render() {
     $("#mining-title").textContent = t("identityMining", snap.mining.percent);
     $("#mining-bar").value = snap.mining.percent;
   }
+  // Calcul impossible (pas de Worker…) : sans identité aucun salon ne s'ouvre, il faut le dire
+  // et proposer de recommencer plutôt que laisser une barre vide
+  $("#identity-failed").hidden = !snap.identityFailed || !!snap.mining;
 
   // Salons affichés selon le réglage
   $("#tabs [data-tab=page]").hidden = settings.view === "site";
@@ -461,6 +464,7 @@ $("#name-ask").addEventListener("submit", (e) => {
 });
 
 $("#leave").addEventListener("click", () => snap.ctx && act("setSite", snap.ctx.site, false));
+$("#identity-retry").addEventListener("click", () => act("retryIdentity"));
 
 // --- Réglages -----------------------------------------------------------------------
 

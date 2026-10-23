@@ -41,6 +41,7 @@ class FakePeer extends EventEmitter {
 // --- fake Worker running pow-worker.js in its own realm ---
 class FakeWorker {
   constructor(file) {
+    if (FakeWorker.broken) throw new Error("no Worker");
     const w = vm.createContext({ TextEncoder, Uint8Array, Uint32Array, Int32Array, Math, setTimeout, console });
     const base = file.includes("/") ? file.slice(0, file.lastIndexOf("/") + 1) : "";
     w.importScripts = (f) => vm.runInContext(src(base + f), w);
@@ -157,7 +158,15 @@ function check(name, cond, extra = "") {
 const base = { sites: { "fr.wikipedia.org": true }, sendRate: 20, recvRate: 1 }; // old settings, must be ignored
 const A = makeEngine("A", { ...base, name: "Alice", color: "#e5484d" });
 const B = makeEngine("B", { ...base, name: "Bob", color: "#0090ff" });
-const mined = async (...E) => { while (!E.every((e) => e.eval("identity.pow") != null)) await wait(50); };
+// Démarrage fini (init) et preuve de travail prête, chez chacun
+const mined = async (...E) => {
+  await Promise.all(E.map((e) => e.eval("ready")));
+  while (!E.every((e) => e.eval("identity.pow") != null)) await wait(50);
+};
+// Attend une condition (au plus ms) au lieu d'un délai fixe : la machine peut être chargée
+const until = async (cond, ms = 5000) => {
+  for (const end = Date.now() + ms; Date.now() < end && !cond(); ) await wait(25);
+};
 await mined(A, B); // preuve de travail des deux identités
 check("auto-join on by default: any public site, never local addresses", A.eval("siteEnabled('example.com')") === true && A.eval("siteEnabled('localhost')") === false && A.eval("siteEnabled('192.168.1.10')") === false);
 
@@ -167,7 +176,7 @@ const b2 = B.page(12, "https://fr.wikipedia.org/wiki/Lyon");
 A.activate(1, 1); B.activate(1, 11);
 const sa = A.sidebar(1);
 const sb = B.sidebar(1);
-await wait(300);
+await until(() => a1.last("peers")?.list.length && b1.last("peers")?.list.length);
 
 const pubA = A.eval("identity.pubkey");
 check("identity mined and stored", Number.isInteger(A.store.pow?.nonce) && A.store.pow.pubkey === pubA);
@@ -371,7 +380,7 @@ check("clear: nothing stored anymore", !Object.keys(A.store.ink ?? {}).length);
 a1.send({ t: "draw", s: { id: "s3", a: anchorPara, pts: [[0, 0], [8, 8]], done: true } });
 await wait(60);
 const a1bis = A.page(3, "https://fr.wikipedia.org/wiki/Paris");
-await wait(200);
+await until(() => a1bis.last("mine")?.list.some((s) => s.id === "s3"));
 check("own drawings sent back to a new tab on the page", a1bis.last("mine")?.list.some((s) => s.id === "s3"));
 a1bis.disconnect();
 C.eval("for (const k of [...rooms.keys()]) endRoom(k)");
@@ -379,7 +388,7 @@ await wait(100);
 
 // view "page only": site room is left
 sb.send({ cmd: "setSettings", args: [{ view: "page" }] });
-await wait(80);
+await until(() => B.eval("[...rooms.values()].every((r) => r.kind === 'page')") && snapB().site === null);
 check("view=page leaves the site room", B.eval("[...rooms.values()].every((r) => r.kind === 'page')") && snapB().site === null);
 sb.send({ cmd: "setSettings", args: [{ view: "both" }] });
 await wait(150);
@@ -417,24 +426,24 @@ const E2 = makeEngine("E2", { ...ex, name: "Deux" });
 const E3 = makeEngine("E3", { ...ex, name: "Trois" });
 await mined(E1, E2, E3);
 const URL_ = "https://example.com/article";
+const instOf = (E) => E.eval("[...rooms.values()].find((r) => r.kind === 'page')?.inst");
 const e1 = E1.page(1, URL_);
-await wait(100);
+await until(() => instOf(E1) === 1);
 const e2 = E2.page(1, URL_);
-await wait(100);
+await until(() => e1.last("peers")?.list.length === 1 && e2.last("peers")?.list.length === 1);
 const e3 = E3.page(1, URL_);
 E3.activate(1, 1);
 const s3 = E3.sidebar(1);
-await wait(150);
-const instOf = (E) => E.eval("[...rooms.values()].find((r) => r.kind === 'page').inst");
+await until(() => instOf(E3) === 2 && s3.last("snap")?.snap.page?.instances.length === 2);
 check("first two in instance #1, third in #2", instOf(E1) === 1 && instOf(E2) === 1 && instOf(E3) === 2, `${instOf(E1)} ${instOf(E2)} ${instOf(E3)}`);
 check("#1 members see each other only", e1.last("peers")?.list.length === 1 && e2.last("peers")?.list.length === 1 && (e3.last("peers")?.list ?? []).length === 0);
 const inst3 = s3.last("snap").snap.page.instances;
 check("sidebar lists instances with counts", JSON.stringify(inst3) === '[{"n":1,"count":2},{"n":2,"count":1}]', JSON.stringify(inst3));
 check("move to #1 by hand (soft limit)", (await s3.ask("setInstance", 1, "page", 1)) === null);
-await wait(150);
+await until(() => instOf(E3) === 1 && e3.last("peers")?.list.length === 2);
 check("third now sees both in #1", instOf(E3) === 1 && e3.last("peers")?.list.length === 2, JSON.stringify(e3.last("peers")));
 check("new empty instance", (await s3.ask("setInstance", 1, "page", "new")) === null && instOf(E3) === 2);
-await wait(150);
+await until(() => e3.last("peers")?.list.length === 0 && e1.last("peers")?.list.length === 1);
 check("alone again in the new instance", e3.last("peers")?.list.length === 0 && e1.last("peers")?.list.length === 1);
 
 // --- page address: ignored params, user choices, sections ---
@@ -447,7 +456,7 @@ const y1 = Y1.page(1, "https://www.youtube.com/watch?v=ar-6Bdo3U4c");
 const y2 = Y2.page(1, "https://www.youtube.com/watch?v=ar-6Bdo3U4c&list=RDar-6Bdo3U4c&start_radio=1&t=29530s");
 Y1.activate(1, 1); Y2.activate(1, 1);
 const sy1 = Y1.sidebar(1), sy2 = Y2.sidebar(1);
-await wait(300);
+await until(() => y1.last("peers")?.list.length === 1 && y2.last("peers")?.list.length === 1);
 check("same video, with or without playlist/time: same room", y1.last("peers")?.list.length === 1 && y2.last("peers")?.list.length === 1);
 const parts2 = () => sy2.last("snap").snap.ctx.parts;
 check("address parts listed, list/t/start_radio off by default, v on",
@@ -495,6 +504,20 @@ check("ping received: member marked as beating", Y1.eval(`${ytMember(Y1)}.beats`
 Y1.eval(`${ytMember(Y1)}.heard = Date.now() - 31000; heartbeat();`);
 await wait(50);
 check("silent for 30 s after pinging: dropped as a normal leave", Y1.eval(`rooms.get(${JSON.stringify(ytKey)}).members.size`) === 0 && y1.last("peers")?.list.length === 0);
+
+// identity proof fails (no Worker): shown in the snapshot, logged once, and can be retried
+FakeWorker.broken = true;
+const F = makeEngine("F", { name: "Fanny", color: "#e5484d" });
+const sf = F.sidebar(1);
+await wait(300);
+FakeWorker.broken = false;
+const fsnap = sf.last("snap")?.snap;
+check("failed proof: identityFailed in the snapshot, no mining", fsnap?.identityFailed === true && fsnap.mining === null, JSON.stringify(fsnap && { f: fsnap.identityFailed, m: fsnap.mining }));
+check("failed proof logged once", fsnap?.log.filter((l) => l.includes("Création de l'identité impossible")).length === 1, JSON.stringify(fsnap?.log));
+sf.send({ cmd: "retryIdentity", args: [] });
+await mined(F);
+await wait(50);
+check("retryIdentity mines the identity again", sf.last("snap").snap.identityFailed === false && Number.isInteger(F.store.pow?.nonce));
 
 console.log(failures ? `\n${failures} FAILURE(S)` : "\nALL PASS");
 process.exit(failures ? 1 : 0);
