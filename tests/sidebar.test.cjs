@@ -44,7 +44,7 @@ setTimeout(() => {
   check("site tab shows only the site", $("#where-path").textContent === "youtube.com" && $("#channel-btn").textContent === "Canal #1 · 20/20 ▾", $("#where-path").textContent);
   $("#tabs [data-tab=page]").click();
   check("no mining banner by default", w.document.querySelector("#mining").hidden);
-  listeners.forEach((f) => f({ t: "snap", snap: { ...snap, mining: { tries: 64, expected: 256 } } }));
+  listeners.forEach((f) => f({ t: "snap", snap: { ...snap, mining: { percent: 25 } } }));
   check("mining banner shows 25 %", !w.document.querySelector("#mining").hidden && w.document.querySelector("#mining-title").textContent.includes("25 %"), w.document.querySelector("#mining-title").textContent);
   check("chat rendered", w.document.querySelector("#chat").textContent.includes("salut"));
   // person card: blocking takes three deliberate steps

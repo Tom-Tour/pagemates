@@ -20,8 +20,6 @@ const STRINGS = {
     chatSitePlaceholder: "Message à tout le site",
     dmPlaceholder: "Message privé à {0}",
     myNameTitle: "Mon pseudo, modifiable dans les réglages",
-    nameAsk: "Pseudo affiché dans le chat, modifiable plus tard dans les réglages",
-    nameOk: "OK",
     personMenu: "Message privé, dessins, bloquer…",
     notifyDm: "Nouveau message privé de {0}",
     inkHide: "Masquer ses dessins",
@@ -73,8 +71,6 @@ const STRINGS = {
     siteNever: "jamais",
     forget: "Oublier",
     noSites: "Aucun",
-    antiFlood: "Anti-flood",
-    floodHelp: "Même règle pour tout le monde, non réglable : 2 messages par seconde au plus. Les messages d'une extension modifiée pour dépasser la limite sont ignorés, et son auteur est mis en sourdine une minute s'il insiste. Les faux comptes coûtent une preuve de travail.",
     // Messages système
     sysJoinedSite: "{0} est arrivé sur le site",
     sysLeftSite: "{0} a quitté le site",
@@ -84,7 +80,6 @@ const STRINGS = {
     sysInstance: "Maintenant sur le canal #{0}",
     // Journal
     logPresenceFailed: "Annonce de présence impossible (relais Nostr injoignables)",
-    logPowDone: "Identité anti-spam prête",
   },
   en: {
     tabPage: "Page",
@@ -103,8 +98,6 @@ const STRINGS = {
     chatSitePlaceholder: "Message the whole site",
     dmPlaceholder: "Private message to {0}",
     myNameTitle: "Your nickname, which you can change in the settings",
-    nameAsk: "Nickname shown in the chat, which you can change later in the settings",
-    nameOk: "OK",
     personMenu: "Private message, drawings, block…",
     notifyDm: "New private message from {0}",
     inkHide: "Hide their drawings",
@@ -155,8 +148,6 @@ const STRINGS = {
     siteNever: "never",
     forget: "Forget",
     noSites: "None",
-    antiFlood: "Anti-flood",
-    floodHelp: "Same rule for everyone, not adjustable: 2 messages per second at most. Messages from an extension modified to go beyond are ignored, and its author is muted for a minute if they keep going. Fake accounts cost a proof of work.",
     sysJoinedSite: "{0} arrived on the site",
     sysLeftSite: "{0} left the site",
     sysJoinedPage: "{0} is on this page",
@@ -164,6 +155,5 @@ const STRINGS = {
     sysRenamed: "{0} is now {1}",
     sysInstance: "You're now on channel #{0}",
     logPresenceFailed: "Couldn't announce presence (Nostr relays unreachable)",
-    logPowDone: "Anti-spam identity ready",
   },
 };

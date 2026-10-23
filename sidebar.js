@@ -60,12 +60,6 @@ browser.windows.getCurrent().then((w) => {
 
 $("#version").textContent = browser.runtime.getManifest().version;
 
-function el(tag, props = {}, ...children) {
-  const e = Object.assign(document.createElement(tag), props);
-  for (const c of children) if (c != null) e.append(c);
-  return e;
-}
-
 // --- Onglets ------------------------------------------------------------------------
 
 for (const b of document.querySelectorAll("#tabs button")) {
@@ -105,35 +99,20 @@ function renderPerson() {
   const known = [...(snap.page?.people ?? []), ...(snap.site?.people ?? []), ...snap.dms].find((p) => p.id === person?.id);
   box.hidden = !known;
   if (!known) return;
-  const close = el("button", { className: "small", textContent: "✕", title: t("close") });
-  close.addEventListener("click", closePerson);
-  const head = el(
-    "div",
-    { className: "head" },
-    swatch(known.color),
-    el("strong", { textContent: known.name }),
-    codeTag(known.code),
-    el("span", { className: "grow" }),
-    close
-  );
   if (person.confirm) {
-    const yes = el("button", { className: "danger", textContent: t("blockConfirm", known.name) });
-    yes.addEventListener("click", () => {
-      act("block", known.id);
-      if (dmWith === known.id) dmWith = null;
-      closePerson();
-    });
-    const no = el("button", { textContent: t("cancel") });
-    no.addEventListener("click", () => {
-      person.confirm = false;
-      render();
-    });
-    box.replaceChildren(
-      head,
-      el("p", { className: "warn", textContent: t("blockConfirmTitle", known.name) }),
-      el("p", { className: "muted", textContent: t("blockConfirmHelp") }),
-      el("div", { className: "actions" }, yes, no)
-    );
+    const confirm = {
+      kind: "block",
+      onYes: () => {
+        act("block", known.id);
+        if (dmWith === known.id) dmWith = null;
+        closePerson();
+      },
+      onNo: () => {
+        person.confirm = false;
+        render();
+      },
+    };
+    box.replaceChildren(...personCard(known, { onClose: closePerson, confirm }));
     return;
   }
   const inkHidden = !!snap.settings.hiddenInk[known.id];
@@ -144,12 +123,11 @@ function renderPerson() {
   });
   const inkBtn = el("button", { textContent: "✏️ " + t(inkHidden ? "inkShow" : "inkHide") });
   inkBtn.addEventListener("click", () => act("toggleInk", known.id));
-  const block = el("button", { className: "subtle-danger", textContent: "⛔ " + t("blockAsk") });
-  block.addEventListener("click", () => {
+  const block = askButton("block", () => {
     person.confirm = true;
     render();
   });
-  box.replaceChildren(head, el("div", { className: "actions" }, dm, inkBtn, block));
+  box.replaceChildren(...personCard(known, { onClose: closePerson, actions: [dm, inkBtn, block] }));
 }
 
 // --- Affichage ------------------------------------------------------------------------
@@ -162,9 +140,8 @@ function render() {
   // l'avancement n'est qu'une estimation (plafonnée à 99 %)
   $("#mining").hidden = !snap.mining;
   if (snap.mining) {
-    const pct = Math.min(99, Math.round((snap.mining.tries / snap.mining.expected) * 100));
-    $("#mining-title").textContent = t("identityMining", pct);
-    $("#mining-bar").value = pct;
+    $("#mining-title").textContent = t("identityMining", snap.mining.percent);
+    $("#mining-bar").value = snap.mining.percent;
   }
 
   // Salons affichés selon le réglage
@@ -189,7 +166,7 @@ function render() {
   $("#leave").hidden = !inRoom;
   const unread = snap.dms.reduce((n, d) => n + d.unread, 0);
   $("#unread").hidden = !unread;
-  $("#unread").textContent = unread;
+  $("#unread").textContent = countText(unread);
 
   // Salon pas disponible ou pas rejoint
   let off = null;
@@ -418,12 +395,6 @@ async function switchInstance(n) {
   showError(error ? t(error) : null);
 }
 
-function swatch(color) {
-  const s = el("span", { className: "swatch" });
-  s.style.background = color;
-  return s;
-}
-
 // Bouton « ⋯ » : ouvre la fiche de la personne
 function more(id) {
   const b = el("button", { textContent: "⋯", title: t("personMenu") });
@@ -434,24 +405,18 @@ function more(id) {
   return b;
 }
 
-// Code de 4 caractères lié à l'identité : deux personnes au même pseudo n'ont pas le même
-function codeTag(code) {
-  return code ? el("span", { className: "code", textContent: code, title: t("codeHelp") }) : null;
-}
-
+// Pastille d'une personne (kit) : un clic ouvre ou ferme sa fiche
 function personChip(p) {
-  const chip = el(
-    "button",
-    { className: "chip" + (person?.id === p.id ? " selected" : ""), title: t("personMenu") },
-    swatch(p.color),
-    el("span", { textContent: p.name }),
-    codeTag(p.code)
-  );
-  chip.addEventListener("click", () => (person?.id === p.id ? closePerson() : openPerson(p.id)));
-  if (p.inkHidden) chip.append(el("span", { className: "tag muted", textContent: "· " + t("inkHiddenTag") }));
-  if (tab === "site" && p.here) chip.append(el("span", { className: "tag muted", textContent: "· " + t("onPage") }));
-  if (p.muted) chip.append(el("span", { className: "tag muted", textContent: "· " + t("mutedFlood") }));
-  return chip;
+  const tags = [];
+  if (p.inkHidden) tags.push(t("inkHiddenTag"));
+  if (tab === "site" && p.here) tags.push(t("onPage"));
+  if (p.muted) tags.push(t("mutedFlood"));
+  return chip(p, {
+    selected: person?.id === p.id,
+    tags,
+    title: t("personMenu"),
+    onClick: () => (person?.id === p.id ? closePerson() : openPerson(p.id)),
+  });
 }
 
 function chatLine(m) {
@@ -559,16 +524,8 @@ function renderSettings(force = false) {
       : [el("li", { className: "muted", textContent: t("noSites") })])
   );
 
-  const blocked = Object.entries(s.blocked);
   $("#blocked").replaceChildren(
-    ...(blocked.length
-      ? blocked.map(([id, name]) => {
-          const b = el("button", { className: "small", textContent: t("unblock") });
-          b.addEventListener("click", () => act("unblock", id));
-          // « Nom · CODE » depuis 0.6 ; avant, le nom seul : on ajoute le début de l'identité
-          return el("li", {}, el("span", { textContent: name.includes("·") ? name : `${name} · ${id.slice(0, 8)}` }), b);
-        })
-      : [el("li", { className: "muted", textContent: t("noBlocked") })])
+    ...peopleList(Object.entries(s.blocked), { empty: t("noBlocked"), action: t("unblock"), onAction: (id) => act("unblock", id) })
   );
 
   $("#log").textContent = snap.log.join("\n");

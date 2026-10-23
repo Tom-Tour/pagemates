@@ -2,8 +2,6 @@
 // Les salons eux-mêmes (réseau, instances, chat, MP) sont dans rooms.js, chargé avant ce fichier.
 // Rien ici ne doit appeler rooms.js avant la fin du chargement : tout passe par init().
 
-const PALETTE = ["#e5484d", "#f76b15", "#ffb224", "#46a758", "#12a594", "#0090ff", "#3e63dd", "#8e4ec6", "#d6409f", "#978365"];
-
 const DEFAULTS = {
   name: "",
   nameSet: false, // pseudo choisi ou accepté (sinon proposé au début de la première conversation)
@@ -23,8 +21,6 @@ const DEFAULTS = {
 };
 
 let settings = { ...DEFAULTS };
-let identity = { secret: null, pubkey: "", pow: null, code: "" };
-let mining = null; // { tries } pendant le calcul de la preuve de travail
 const sendTimes = [];
 
 // tabId → { id, windowId, port, url, site, siteKey, pageKey, incognito, liveTimes, lastPeers }
@@ -32,15 +28,11 @@ const tabs = new Map();
 // windowId → tabId de l'onglet actif
 const activeTab = new Map();
 const sidebars = new Set(); // { port, windowId }
-const logLines = [];
+const journal = createLog();
 
 function log(line) {
-  logLines.push(`${new Date().toLocaleTimeString()} ${line}`);
-  if (logLines.length > 50) logLines.shift();
+  journal.add(line);
 }
-
-const hex = (bytes) => [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
-const unhex = (s) => Uint8Array.from(s.match(/../g), (h) => parseInt(h, 16));
 
 async function sha(text) {
   return hex(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))).slice(0, 32);
@@ -374,7 +366,8 @@ function snapshot(windowId) {
     myCode: identity.code,
     instanceSize: INSTANCE_SIZE,
     sendRate: LIMITS.SEND_PER_SECOND,
-    mining: mining && { tries: mining.tries, expected: 2 ** POW.BITS },
+    mining: myIdentity.mining && { percent: powPercent(myIdentity.mining.tries) },
+    identityFailed: myIdentity.failed,
     ctx: tab?.site
       ? {
           site: tab.site,
@@ -396,7 +389,7 @@ function snapshot(windowId) {
       unread: th.unread,
       msgs: th.msgs,
     })),
-    log: logLines,
+    log: journal.lines,
   };
 }
 
@@ -586,24 +579,22 @@ browser.tabs.query({ url: ["http://*/*", "https://*/*"] }).then((list) => {
   for (const tab of list) browser.tabs.executeScript(tab.id, { file: "content.js" }).catch(() => {});
 });
 
-// Preuve de travail de notre identité : une seule fois, puis gardée avec la clé
-function mineIdentity() {
-  mining = { tries: 0 };
-  pow
-    .mine(identity.pubkey, POW.BITS, (tries) => {
-      mining.tries = tries;
-      update();
-    })
-    .then(({ nonce, code }) => {
-      mining = null;
-      identity.pow = nonce;
-      identity.code = code;
-      browser.storage.local.set({ pow: { v: POW.VERSION, pubkey: identity.pubkey, nonce, code } });
-      log(t("logPowDone"));
-      reconcile();
-    });
-  update();
-}
+// Identité : clé Nostr et preuve de travail (calculée une seule fois), reprises ou créées par
+// le kit ; gardées dans browser.storage (« identity », « pow »)
+const myIdentity = createIdentity({
+  pow,
+  read: async () => {
+    const stored = await browser.storage.local.get(["identity", "pow"]);
+    return { secret: stored.identity, proof: stored.pow };
+  },
+  write: ({ secret, proof }) => browser.storage.local.set(secret ? { identity: secret } : { pow: proof }),
+  onChange: () => update(),
+  onReady: (code) => {
+    log(t("logIdentityReady", code));
+    reconcile();
+  },
+});
+const identity = myIdentity.identity; // { secret, pubkey, pow, code } : rempli par le kit
 
 async function init() {
   const stored = await browser.storage.local.get(["settings", "identity", "pow", "ink"]);
@@ -615,18 +606,12 @@ async function init() {
   delete settings.sendRate;
   delete settings.recvRate;
   // Réglages d'avant nameSet : un pseudo déjà changé compte comme choisi
-  if (stored.settings?.name && !/^(Invité|Guest)-\d{4}$/.test(stored.settings.name)) settings.nameSet = true;
-  if (!settings.name) settings.name = `${t("defaultName")}-${Math.floor(1000 + Math.random() * 9000)}`;
+  if (stored.settings?.name && !isProposedName(stored.settings.name)) settings.nameSet = true;
+  if (!settings.name) settings.name = proposedName();
   if (!settings.color) settings.color = PALETTE[Math.floor(Math.random() * PALETTE.length)];
   setLang(settings.lang);
-  let secret = typeof stored.identity === "string" && /^[0-9a-f]{64}$/.test(stored.identity) ? stored.identity : null;
-  if (!secret) secret = hex(NostrTools.generateSecretKey());
-  identity = { secret: unhex(secret), pubkey: NostrTools.getPublicKey(unhex(secret)), pow: null };
-  const saved = stored.pow;
-  if (saved?.v === POW.VERSION && saved.pubkey === identity.pubkey && Number.isSafeInteger(saved.nonce)) identity.pow = saved.nonce;
-  await browser.storage.local.set({ settings, identity: secret });
-  if (identity.pow == null) mineIdentity();
-  else identity.code = saved.code;
+  await browser.storage.local.set({ settings });
+  await myIdentity.load();
   for (const tab of await browser.tabs.query({ active: true })) activeTab.set(tab.windowId, tab.id);
 }
 
